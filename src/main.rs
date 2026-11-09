@@ -190,6 +190,7 @@ async fn run(args: Args) -> Result<u8, ShellError> {
     } else if interactive {
         // NSH-18: VS Code's command marks, where brush finds them supported.
         let ui = brush_interactive::UIOptions { terminal_shell_integration: true, ..Default::default() };
+        brush_interactive::set_completes(completes);
         let mut input = WithNavi::new(brush_interactive::ReedlineInputBackend::new(&ui, &shell)?);
         brush_interactive::InteractiveShell::new(&shell, &mut input, &(&ui).into())?.run_interactively().await?;
         // NSH-27: the file as long as HISTFILESIZE says, now history is written.
@@ -650,6 +651,15 @@ fn autocd<SE: brush_core::ShellExtensions>(shell: &mut brush_core::Shell<SE>, li
 }
 
 /// NSH-4: whether a word runs something: a keyword, alias, function, builtin or program.
+/// NSH-53: a line for navi is complete when Enter is pressed, though a `'`
+/// in it (`?what's wrong`) would leave bash waiting for the quote's end.
+fn completes(line: &str, shell: &mut dyn std::any::Any) -> bool {
+    let Some(shell) = shell.downcast_mut::<brush_core::Shell<errors::Extensions>>() else { return false };
+    let ask = navi::Ask::from_setting(shell.env_str("NEOSH_ASK").as_deref());
+    let dir = shell.working_dir().to_path_buf();
+    !matches!(navi::classify_in(line, ask, |word| is_command(shell, word), |word| navi::globs_a_file(word, &dir)), navi::Line::Shell)
+}
+
 fn is_command<SE: brush_core::ShellExtensions>(shell: &mut brush_core::Shell<SE>, word: &str) -> bool {
     shell.is_keyword(word)
         || shell.aliases().contains_key(word)

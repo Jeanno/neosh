@@ -134,6 +134,10 @@ hands a line to another shell. What neosh adds is below.
   there (`?.txt` beside `a.txt`). Every other line is the shell's and runs
   as bash would run it: neosh never guesses that a command was meant for
   navi, so Enter always does what it does in bash.
+- NSH-53: A line for navi is sent on Enter even when bash would read it as
+  unfinished: a `'` or `"` in the question (`?what's wrong`, `npm test |?it's
+  failing`) opens no quote. A line for the shell still waits for its quote
+  or its `done` to close, as in bash.
 - NSH-23: When a line typed as a command is not found (status 127) and reads
   as a sentence (NSH-17), the next prompt starts with `?` and the line,
   so Enter asks navi instead, and ^C clears it. A suggestion from navi

@@ -20,3 +20,8 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
 
 [profile.release]
 lto = "thin"
+
+# brush-interactive 0.4.0 with one change, a hook in its line validator so
+# a line for navi is never held open by a quote (vendor/brush-interactive/NEOSH.md).
+[patch.crates-io]
+brush-interactive = { path = "vendor/brush-interactive" }

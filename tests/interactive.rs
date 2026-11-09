@@ -164,6 +164,19 @@ fn job_control_and_a_command_of_several_lines_work_through_neosh() {
     assert!(log.contains("~/work $ for f in a b; do ↵ echo got-$f ↵ done (ok, printed 2 lines: "), "{log}");
 }
 
+// NSH-53
+#[test]
+fn a_quote_in_a_question_does_not_hold_it_open() {
+    let home = Home::new("quote");
+    let screen = home.run(&["?what's wrong", "echo ok |?why's that", "echo 'held", "closed'", "exit"], &[]);
+    let log = home.log();
+    assert!(log.contains("-p what's wrong"), "{log}");
+    assert!(log.contains("STDIN: ok"), "{log}");
+    assert!(log.contains("why's that"), "{log}");
+    // The shell's own line still waits for its quote.
+    assert!(screen.contains("held\nclosed"), "{screen}");
+}
+
 // NSH-9
 #[test]
 fn a_question_mark_alone_after_a_failure_asks_why() {
