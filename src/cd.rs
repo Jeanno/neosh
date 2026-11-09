@@ -6,7 +6,7 @@ use std::sync::OnceLock;
 use brush_core::builtins::{BoxFuture, CommandExecuteFunc};
 use brush_core::commands::{CommandArg, ExecutionContext};
 use brush_core::ExecutionResult;
-use brush_core::extensions::DefaultShellExtensions as SE;
+use crate::errors::Extensions as SE;
 
 static BRUSH_CD: OnceLock<CommandExecuteFunc<SE>> = OnceLock::new();
 

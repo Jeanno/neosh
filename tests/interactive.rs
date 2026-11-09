@@ -78,7 +78,7 @@ fn a_sentence_and_a_question_reach_navi_with_what_was_run() {
     assert!(sessions[0].starts_with("neosh-"));
     // Said once, for the sentence only; a typo is still a typo.
     assert_eq!(screen.matches("a sentence goes to navi").count(), 1, "{screen}");
-    assert!(screen.contains("command not found: gti"), "{screen}");
+    assert!(screen.contains("gti: command not found"), "{screen}");
 }
 
 // NSH-4, NSH-23
@@ -86,7 +86,7 @@ fn a_sentence_and_a_question_reach_navi_with_what_was_run() {
 fn a_sentence_runs_as_a_command_then_waits_as_a_question() {
     let home = Home::new("marked");
     let screen = home.run(&["why did that fail", "", "?how about now", "exit"], &[]);
-    assert!(screen.contains("command not found: why"), "{screen}");
+    assert!(screen.contains("why: command not found"), "{screen}");
     assert!(screen.contains("$ ?why did that fail"), "{screen}");
     let log = home.log();
     assert_eq!(log.matches("ARGS:").count(), 2, "{log}");
@@ -102,7 +102,7 @@ fn the_offered_question_can_be_cleared_and_nothing_is_sent() {
     let home = Home::new("cleared");
     let screen = home.run(&["show me the files", "\u{15}true", "?", "NEOSH_ASK=off", "show me the files", "? hi", "exit"], &[]);
     assert!(screen.contains("Ask navi: start a line with ?"), "{screen}");
-    assert_eq!(screen.matches("command not found: show").count(), 2, "{screen}");
+    assert_eq!(screen.matches("show: command not found").count(), 2, "{screen}");
     assert_eq!(home.log(), "");
 }
 
@@ -297,7 +297,7 @@ fn autocd_cdspell_and_the_terminal_size_work_as_in_bash() {
     let lines: Vec<&str> = screen.lines().map(str::trim).collect();
     let work = std::fs::canonicalize(home.0.join("work")).unwrap();
     // Off by default: a directory's name is no command.
-    assert!(screen.contains("command not found: alpha"), "{screen}");
+    assert!(screen.contains("alpha: command not found"), "{screen}");
     assert!(lines.contains(&"cd -- alpha"), "{screen}");
     assert!(lines.contains(&format!("{}", work.join("alpha").display()).as_str()), "{screen}");
     assert!(lines.contains(&"cd -- .."), "{screen}");

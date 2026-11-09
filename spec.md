@@ -78,6 +78,12 @@ hands a line to another shell. What neosh adds is below.
   functions, expansions, globs, aliases, arrays and `[[ … ]]`, job control
   (^Z, `jobs`, `fg`, `bg`), and bash's builtins. Where brush and bash differ,
   bash is right, and the difference is brush's to fix.
+- NSH-52: An error is said as bash says it: a script names itself and the
+  line (`s.sh: line 2: x: command not found`, a sourced file names that
+  file), `-c` and commands on stdin give the line (`neosh: line 1: …`),
+  and a line typed at the prompt names neosh (`neosh: x: command not
+  found`). What follows is brush's wording, except command not found,
+  which is bash's.
 
 - NSH-25: `cd` looks a relative directory up in `CDPATH` as bash does:
   each entry in turn (an empty one is `.`), the first holding the directory

@@ -6,6 +6,7 @@
 
 mod bang;
 mod cd;
+mod errors;
 mod histctl;
 mod histsize;
 mod navi;
@@ -120,7 +121,7 @@ fn main() {
 async fn run(args: Args) -> Result<u8, ShellError> {
     let interactive = args.command.is_none() && args.rest.is_empty() && std::io::stdin().is_terminal();
     let from_stdin = args.command.is_none() && args.rest.is_empty();
-    let mut builder = brush_core::Shell::builder()
+    let mut builder = brush_core::Shell::builder_with_extensions::<errors::Extensions>()
         .login(args.login)
         .interactive(interactive)
         .command_string_mode(args.command.is_some())
@@ -138,7 +139,7 @@ async fn run(args: Args) -> Result<u8, ShellError> {
     let mut shell = builder.build().await?;
     // NSH-25: CDPATH, which brush's `cd` does not look in.
     cd::install(&mut shell);
-    let shell: ShellRef = std::sync::Arc::new(tokio::sync::Mutex::new(shell));
+    let shell: ShellRef<errors::Extensions> = std::sync::Arc::new(tokio::sync::Mutex::new(shell));
 
     // NSH-1: ~/.profile for a login shell, ~/.neoshrc for an interactive one.
     let rc = std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".neoshrc"));
