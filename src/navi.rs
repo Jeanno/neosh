@@ -165,6 +165,8 @@ pub struct Ran {
     pub dir: PathBuf,
     pub status: u8,
     pub took: std::time::Duration,
+    /// NSH-41: the file its output is kept in, when it is recorded.
+    pub output: Option<PathBuf>,
 }
 
 /// The commands since navi last answered, oldest first, kept to RECENT_KEPT.
@@ -200,6 +202,14 @@ impl Recent {
                 // NSH-15
                 if let Some(took) = crate::prompt::long(r.took) {
                     how += &format!(", took {took}");
+                }
+                // NSH-41: where its output is, never the output.
+                if let Some(file) = &r.output {
+                    how += &match std::fs::read_to_string(file).map(|t| t.lines().count()) {
+                        Ok(0) | Err(_) => ", printed nothing".to_string(),
+                        Ok(1) => format!(", printed 1 line: {}", file.display()),
+                        Ok(n) => format!(", printed {n} lines: {}", file.display()),
+                    };
                 }
                 // NSH-6: one command a line; a command of several shows its breaks.
                 let line = r.line.lines().map(str::trim_end).collect::<Vec<_>>().join(" ↵ ");
@@ -448,7 +458,7 @@ mod tests {
     fn recent_keeps_the_last_ten_and_says_where_and_how_each_ended() {
         let mut r = Recent::default();
         for i in 0..12 {
-            r.push(Ran { line: format!("cmd {i}"), dir: PathBuf::from("/home/u/proj"), status: (i % 2) as u8, took: Default::default() });
+            r.push(Ran { line: format!("cmd {i}"), dir: PathBuf::from("/home/u/proj"), status: (i % 2) as u8, took: Default::default(), output: None });
         }
         let said = r.describe(Some(Path::new("/home/u")));
         let lines: Vec<&str> = said.lines().collect();
@@ -460,14 +470,22 @@ mod tests {
         r.clear();
         assert!(!r.last_failed());
         assert_eq!(r.describe(None), "");
-        r.push(Ran { line: "ls\n-l".into(), dir: PathBuf::from("/home/u"), status: 0, took: Default::default() });
+        r.push(Ran { line: "ls\n-l".into(), dir: PathBuf::from("/home/u"), status: 0, took: Default::default(), output: None });
         assert_eq!(r.describe(Some(Path::new("/home/u"))), "~ $ ls ↵ -l (ok)");
         r.clear();
-        r.push(Ran { line: "for f in a b; do\necho $f\ndone".into(), dir: PathBuf::from("/home/u"), status: 0, took: Default::default() });
+        r.push(Ran { line: "for f in a b; do\necho $f\ndone".into(), dir: PathBuf::from("/home/u"), status: 0, took: Default::default(), output: None });
         assert_eq!(r.describe(Some(Path::new("/home/u"))), "~ $ for f in a b; do ↵ echo $f ↵ done (ok)");
         // NSH-15
         r.clear();
-        r.push(Ran { line: "cargo build".into(), dir: PathBuf::from("/home/u"), status: 101, took: std::time::Duration::from_secs(64) });
+        r.push(Ran { line: "cargo build".into(), dir: PathBuf::from("/home/u"), status: 101, took: std::time::Duration::from_secs(64), output: None });
         assert_eq!(r.describe(Some(Path::new("/home/u"))), "~ $ cargo build (exit 101, took 1m 4s)");
+        // NSH-41: where the output is, and how long, never the output itself.
+        let kept = std::env::temp_dir().join(format!("neosh-described-{}.txt", std::process::id()));
+        std::fs::write(&kept, "a\nb\n").unwrap();
+        let mut r = Recent::default();
+        r.push(Ran { line: "ls".into(), dir: PathBuf::from("/home/u"), status: 0, took: Default::default(), output: Some(kept.clone()) });
+        r.push(Ran { line: "true".into(), dir: PathBuf::from("/home/u"), status: 0, took: Default::default(), output: Some(PathBuf::from("/nowhere")) });
+        assert_eq!(r.describe(Some(Path::new("/home/u"))), format!("~ $ ls (ok, printed 2 lines: {})\n~ $ true (ok, printed nothing)", kept.display()));
+        let _ = std::fs::remove_file(kept);
     }
 }

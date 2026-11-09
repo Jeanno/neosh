@@ -7,7 +7,8 @@ use std::process::Command;
 /// Logs its arguments, directory, what it was told and what was piped in; a
 /// prompt asking for a suggestion hands one back (CLI-41).
 const STAND_IN: &str = r#"#!/bin/sh
-{ echo "ARGS: $*"; echo "PWD: $PWD"; echo "RECENT: $NAVI_RECENT"; [ -t 0 ] || echo "STDIN: $(cat)"; echo ---; } >> "$HOME/navi.log"
+{ echo "ARGS: $*"; echo "PWD: $PWD"; printf 'RECENT: %s\n' "$NAVI_RECENT"; echo "INDEX: $NAVI_SHELL_INDEX"; [ -t 0 ] || echo "STDIN: $(cat)"; echo ---; } >> "$HOME/navi.log"
+[ -n "$NAVI_SHELL_INDEX" ] && rm -rf "$HOME/rec" && cp -R "$(dirname "$NAVI_SHELL_INDEX")" "$HOME/rec"
 case "$*" in *suggest*) echo 'echo suggested-ran' > "$NAVI_COMMAND_FILE" ;; esac
 echo "navi says hi"
 case "$*" in *"cannot answer"*) exit 3 ;; esac
@@ -68,7 +69,7 @@ fn a_sentence_and_a_question_reach_navi_with_what_was_run() {
     let log = home.log();
     assert!(log.contains("-p why did that fail"), "{log}");
     assert!(log.contains("-p and now"), "{log}");
-    assert!(log.contains("RECENT: ~/work $ false (exit 1)"), "{log}");
+    assert!(log.contains("RECENT: ~/work $ false (exit 1, printed nothing)"), "{log}");
     let work = std::fs::canonicalize(home.0.join("work")).unwrap();
     assert!(log.contains(&format!("PWD: {}", work.display())), "{log}");
     // One conversation: both asked in the same session.
@@ -92,7 +93,7 @@ fn a_sentence_runs_as_a_command_then_waits_as_a_question() {
     assert_eq!(log.matches("ARGS:").count(), 2, "{log}");
     assert!(log.contains("-p how about now"), "{log}");
     assert!(log.contains("-p why did that fail"), "{log}");
-    assert!(log.contains("RECENT: ~/work $ why did that fail (exit 127)"), "{log}");
+    assert!(log.contains("RECENT: ~/work $ why did that fail (exit 127, printed 1 line: "), "{log}");
     assert!(!screen.contains("a sentence goes to navi"), "{screen}");
 }
 
@@ -160,7 +161,7 @@ fn job_control_and_a_command_of_several_lines_work_through_neosh() {
     assert!(screen.contains("Stopped\tsleep 20"), "{screen}");
     assert!(screen.contains("got-a") && screen.contains("got-b"), "{screen}");
     let log = home.log();
-    assert!(log.contains("~/work $ for f in a b; do ↵ echo got-$f ↵ done (ok)"), "{log}");
+    assert!(log.contains("~/work $ for f in a b; do ↵ echo got-$f ↵ done (ok, printed 2 lines: "), "{log}");
 }
 
 // NSH-9
@@ -171,7 +172,7 @@ fn a_question_mark_alone_after_a_failure_asks_why() {
     let log = home.log();
     assert_eq!(log.matches("ARGS:").count(), 1, "{log}");
     assert!(log.contains("-p why did my last command fail"), "{log}");
-    assert!(log.contains("~/work $ ls missing-folder (exit 1)"), "{log}");
+    assert!(log.contains("~/work $ ls missing-folder (exit 1, printed 1 line: "), "{log}");
     // Before the failure, and after a command that worked: how to ask.
     assert_eq!(screen.matches("Ask navi: start a line with ?").count(), 2, "{screen}");
 }
@@ -349,4 +350,52 @@ fn setup_at_first_start_runs_navi_s_and_copies_zsh_s_look_at_once() {
     // It counts at once: the prompt is zsh's, and the colours are there.
     assert!(screen.contains("-zsh-look $ echo"), "{screen}");
     assert!(screen.contains("\nGxfxcxdxbxegedabagacad"), "{screen}");
+}
+
+// NSH-34, NSH-36, NSH-37, NSH-39, NSH-41, NSH-42, NSH-43
+#[test]
+fn what_commands_print_is_kept_for_navi_and_gone_with_the_terminal() {
+    let home = Home::new("record");
+    let screen = home.run(
+        &["printf '\\033[31mred\\033[0m\\nsecond\\n'", " echo private-one", "NEOSH_RECORD=off", "echo private-two", "NEOSH_RECORD=on", "echo token=abc123", "? what printed", "exit"],
+        &[],
+    );
+    // The terminal saw it all, colours and all, and no marks.
+    assert!(screen.contains("red") && screen.contains("private-one") && screen.contains("private-two"), "{screen}");
+    assert!(!screen.contains("6973"), "{screen}");
+    let log = home.log();
+    let index = log.lines().find_map(|l| l.strip_prefix("INDEX: ")).filter(|i| !i.is_empty()).unwrap_or_else(|| panic!("{log}")).to_string();
+    // Told where, never what.
+    assert!(log.contains("~/work $ printf '\\033[31mred\\033[0m\\nsecond\\n' (ok, printed 2 lines: "), "{log}");
+    assert!(!log.lines().any(|l| l == "second" || l.contains("STDIN")), "{log}");
+    let rec = home.0.join("rec");
+    let listed = std::fs::read_to_string(rec.join("index.txt")).unwrap();
+    assert!(listed.contains("[exit 0, ") && listed.contains("2 lines] ~/work $ printf"), "{listed}");
+    assert!(!listed.contains("private"), "{listed}");
+    assert!(listed.contains("$ echo token=abc123"), "{listed}");
+    let kept: Vec<String> = std::fs::read_dir(&rec).unwrap().flatten().filter(|e| e.file_name().to_string_lossy().ends_with(".txt") && e.file_name() != "index.txt").map(|e| std::fs::read_to_string(e.path()).unwrap()).collect();
+    assert!(kept.contains(&"red\nsecond\n".to_string()), "{kept:?}");
+    assert!(kept.contains(&"token=[blanked]\n".to_string()), "{kept:?}");
+    assert!(!kept.iter().any(|k| k.contains("private")), "{kept:?}");
+    // NSH-42: the terminal closed, and the directory went with it.
+    assert!(!std::path::Path::new(&index).exists(), "{index}");
+}
+
+// NSH-43
+#[test]
+fn with_recording_off_from_the_start_there_is_no_recorder() {
+    let home = Home::new("norecord");
+    home.run(&["echo hi", "? what printed", "exit"], &[("NEOSH_RECORD", "off")]);
+    let log = home.log();
+    assert!(log.contains("INDEX: \n") && log.contains("~/work $ echo hi (ok)"), "{log}");
+}
+
+// NSH-45
+#[test]
+fn a_failure_hints_at_asking_for_the_first_three() {
+    let home = Home::new("hint");
+    let screen = home.run(&["false", "true", "false", "sleep 5", "@wait 0.5", "\x03", "false", "false", "exit"], &[]);
+    assert_eq!(screen.matches("? to ask why").count(), 3, "{screen}");
+    let screen = home.run(&["NEOSH_HINT=off", "false", "exit"], &[]);
+    assert!(!screen.contains("? to ask why"), "{screen}");
 }

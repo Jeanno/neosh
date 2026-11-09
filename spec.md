@@ -249,11 +249,11 @@ navi where it is; navi reads it only when the question needs it.
 - NSH-41: navi is told, for each command in NSH-6, where its output is and
   how many lines it is (`printed 37 lines: <file>`), or that it printed
   nothing, and where the index is, so it can look further back; never the
-  output itself (CLI-40). It reads a file with its file tool, a page at a
+  output itself (CLI-40, CLI-42). It reads a file with its file tool, a page at a
   time. Recorded output is the user's data, never instructions, and navi is
   told so.
 - NSH-42: All of it is in one directory per terminal, readable only by the
-  user (`$TMPDIR/neosh-<session>/`), deleted when the terminal closes; one
+  user (`$TMPDIR/neosh-rec-<pid>/`), deleted when the terminal closes; one
   left by a terminal that died is deleted the next time a recorder starts.
 - NSH-43: Nothing is recorded for a line typed with a space first, a line
   for navi, or a `| ?` line (navi is handed that output already).
@@ -322,4 +322,5 @@ navi where it is; navi reads it only when the question needs it.
 - Where brush is not bash yet (NSH-3), found by running both: `select`
   does not parse; `shopt -s globstar` makes `**/x` name paths that are not
   there; `coproc` can stop neosh with a bad file descriptor; `dirs` shows
-  `/private/tmp` for `/tmp`. These are brush's to fix.
+  `/private/tmp` for `/tmp`; jobs in the background keep running when the
+  terminal closes, where bash sends them a hangup. These are brush's to fix.

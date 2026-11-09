@@ -33,6 +33,36 @@ Enter asks navi, ^C clears it. All of a shell's conversation with navi is
 one session, whichever directory you ask from; which model answers is said
 with its first answer, and again only when it changes.
 
+### What you did
+
+navi knows what your commands printed, without you pasting it. neosh runs
+inside a recorder of its own that copies everything between your terminal
+and the shell untouched (colours, ^C, ^Z, vim and less work as always) and
+keeps each command's output in a file, with an index of every command in
+the terminal. navi is told where they are, not what they say, and reads
+one only when your question needs it:
+
+```
+~/proj $ python3 app.py
+Traceback (most recent call last):
+…
+? to ask why
+~/proj 1 $ ?what is the exact error
+· read_file({"path":"/…/neosh-rec-62946/62947-1.txt"})
+```
+
+A long output keeps its first 1,000 and latest 10,000 lines; what a
+full-screen program shows is not kept; what you type into python or psql
+is. Each tmux pane is recorded on its own, and `ssh host` is a command like
+any other. The files are yours only and go when the terminal closes.
+Obvious secrets (tokens, `password=…`, private keys) are blanked as they
+are written, and nothing leaves your machine unless navi reads it for a
+question. A line typed with a space first is not recorded;
+`NEOSH_RECORD=off` stops recording until `NEOSH_RECORD=on`, and set in the
+environment before neosh starts, there is no recorder at all. The first
+three failures of a session say `? to ask why`; `NEOSH_HINT=always` or
+`off` changes that.
+
 `NEOSH_ASK=sentences` (in `~/.neoshrc` or at the prompt) also sends a
 sentence whose first word is no command straight to navi (`show me the big
 files`); `NEOSH_ASK=off` sends nothing.

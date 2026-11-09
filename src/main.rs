@@ -11,6 +11,7 @@ mod histctl;
 mod histsize;
 mod navi;
 mod prompt;
+mod record;
 mod setup;
 mod term;
 
@@ -105,6 +106,16 @@ fn main() {
             std::process::exit(2);
         }
     };
+    // NSH-34: an interactive neosh runs inside its recorder.
+    if args.command.is_none() && args.rest.is_empty() {
+        if let Some(code) = record::wrap(&argv) {
+            std::process::exit(code);
+        }
+    }
+    if !record::recorded() {
+        // SAFETY: before any thread is started.
+        unsafe { std::env::remove_var(record::INDEX) };
+    }
     // NSH-47: offered once a terminal session starts with no ~/.neoshrc.
     let terminal = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
     if let Some(rc) = rc.filter(|rc| terminal && args.command.is_none() && args.rest.is_empty() && !args.norc && !rc.exists()) {
@@ -217,12 +228,38 @@ struct WithNavi<IB: InputBackend> {
     /// The line brush adds to history as it runs it, and whether bash would keep it (NSH-26).
     settle: Option<(String, bool)>,
     session: String,
+    /// NSH-36: this terminal's recorder, when there is one.
+    marks: Option<Marks>,
+    /// NSH-45: how many times `? to ask why` was said.
+    hinted: u32,
+    /// NSH-34: whether `?` has said output is not kept.
+    told_unrecorded: bool,
+}
+
+/// What neosh needs to mark commands for the recorder (NSH-36, NSH-40).
+struct Marks {
+    key: String,
+    dir: PathBuf,
+    n: u32,
+    /// The command being run, by id.
+    open: Option<String>,
+    /// Stopped jobs and the command each is.
+    stopped: Vec<(usize, String)>,
+}
+
+impl Marks {
+    fn from_env() -> Option<Marks> {
+        if !record::recorded() {
+            return None;
+        }
+        Some(Marks { key: std::env::var(record::KEY).ok()?, dir: PathBuf::from(std::env::var_os(record::DIR)?), n: 0, open: None, stopped: Vec::new() })
+    }
 }
 
 impl<IB: InputBackend> WithNavi<IB> {
     fn new(inner: IB) -> Self {
         let started = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-        Self { inner, recent: navi::Recent::default(), handed: None, piped: None, noted: false, took: None, suggested: None, missed: None, retyped: None, substituted: bang::Memory::default(), settle: None, session: format!("neosh-{started}-{}", std::process::id()) }
+        Self { inner, recent: navi::Recent::default(), handed: None, piped: None, noted: false, took: None, suggested: None, missed: None, retyped: None, substituted: bang::Memory::default(), settle: None, session: format!("neosh-{started}-{}", std::process::id()), marks: Marks::from_env(), hinted: 0, told_unrecorded: false }
     }
 }
 
@@ -281,16 +318,46 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                     settle(history, &line, keep, erase);
                 }
             }
-            if let (Some((line, dir, at)), Some(s)) = (self.handed.take(), guard.as_ref()) {
+            if let (Some((line, dir, at)), Some(s)) = (self.handed.take(), guard.as_mut()) {
                 let took = at.elapsed();
                 self.took = Some(took);
                 let status = s.last_exit_status();
+                // NSH-40: a command ^Z stopped is the newest stopped job.
+                let stopped = (status > 128).then(|| s.jobs().jobs.iter().filter(|j| matches!(j.state, brush_core::jobs::JobState::Stopped)).map(|j| j.id).max()).flatten();
+                let mut output = None;
+                if let Some(marks) = self.marks.as_mut() {
+                    if let Some(id) = marks.open.take() {
+                        let how = match stopped {
+                            Some(job) => {
+                                marks.stopped.retain(|(j, _)| *j != job);
+                                marks.stopped.push((job, id.clone()));
+                                format!("stopped %{job}")
+                            }
+                            None => format!("exit {status}"),
+                        };
+                        print!("{}", record::end_mark(&marks.key, &id, &how));
+                        let _ = std::io::stdout().flush();
+                        output = Some(record::file(&marks.dir, &id));
+                    }
+                }
+                // NSH-45: a failure, not ^C or ^Z, says navi can be asked.
+                let hint = s.env_str("NEOSH_HINT").map(|h| h.into_owned());
+                let shown = match hint.as_deref() {
+                    Some("off") => false,
+                    Some("always") => true,
+                    _ => self.hinted < 3,
+                };
+                if status != 0 && status != 130 && stopped.is_none() && shown {
+                    self.hinted += 1;
+                    let dim = s.env_str("NO_COLOR").is_none();
+                    eprintln!("{}", if dim { "\x1b[2m? to ask why\x1b[0m" } else { "? to ask why" });
+                }
                 // NSH-23: a sentence typed as a command, offered to navi.
                 let ask = navi::Ask::from_setting(s.env_str("NEOSH_ASK").as_deref());
                 if status == 127 && ask == navi::Ask::Marked && self.suggested.is_none() {
                     self.missed = Some(line.clone());
                 }
-                self.recent.push(navi::Ran { line, dir, status, took });
+                self.recent.push(navi::Ran { line, dir, status, took, output });
             }
             // NSH-33: zsh's precmd, the status left for the prompt; a PS1 it set counts.
             let mut composed = prompt.prompt.clone();
@@ -403,6 +470,17 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                         }
                         self.handed = Some((line.trim().to_string(), dir.clone(), Instant::now()));
                         self.settle = Some((line.trim().to_string(), keep));
+                        // NSH-36, NSH-43: marked, unless typed with a space first or recording is off.
+                        let recording = guard.as_ref().is_none_or(|s| s.env_str("NEOSH_RECORD").as_deref() != Some("off"));
+                        if let (Some(marks), true) = (self.marks.as_mut(), recording && !line.starts_with(' ')) {
+                            // NSH-40: `fg` writes on in the file of the command it brings back.
+                            let resumes = guard.as_mut().and_then(|s| brought_back(s, line.trim())).and_then(|job| marks.stopped.iter().find(|(j, _)| *j == job).map(|(_, id)| id.clone()));
+                            marks.n += 1;
+                            let id = format!("{}-{}", std::process::id(), marks.n);
+                            print!("{}", record::start_mark(&marks.key, &id, &dir.to_string_lossy(), line.trim(), resumes.as_deref()));
+                            let _ = std::io::stdout().flush();
+                            marks.open = Some(resumes.unwrap_or(id));
+                        }
                         // NSH-29: a directory's name alone goes there.
                         let home = guard.as_ref().and_then(|s| s.env_str("HOME").map(|h| PathBuf::from(h.as_ref())));
                         let auto = guard.as_mut().filter(|s| s.options().auto_cd).is_some_and(|s| autocd(s, line.trim(), &dir, home.as_deref()));
@@ -471,6 +549,11 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                         ended(127);
                         continue;
                     };
+                    // NSH-34: once, when the recorder could not start.
+                    if let (false, Ok(why)) = (self.told_unrecorded, std::env::var(record::FAILED)) {
+                        self.told_unrecorded = true;
+                        eprintln!("\x1b[2m· output is not being kept in this terminal ({why}); navi sees only the commands\x1b[0m");
+                    }
                     // NSH-19: once, so a sentence meant as a command is not a mystery.
                     if !self.noted && !line.trim_start().starts_with('?') {
                         self.noted = true;
@@ -499,6 +582,17 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
     fn set_read_buffer(&mut self, buffer: String, cursor: usize) {
         self.inner.set_read_buffer(buffer, cursor);
     }
+}
+
+/// NSH-40: the job `fg` (or `%n` alone) brings to the foreground.
+fn brought_back<SE: brush_core::ShellExtensions>(shell: &mut brush_core::Shell<SE>, line: &str) -> Option<usize> {
+    let mut words = line.split_whitespace();
+    let spec = match words.next()? {
+        "fg" => words.next().unwrap_or("%+").to_string(),
+        w if w.starts_with('%') && words.next().is_none() => w.to_string(),
+        _ => return None,
+    };
+    shell.jobs_mut().resolve_job_spec(&spec).map(|j| j.id)
 }
 
 /// NSH-33: zsh's hooks, as zsh and bash-preexec run them: the `name`
