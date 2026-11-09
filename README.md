@@ -1,16 +1,24 @@
 # neosh
 
-**A bash shell with AI help built in: start a line with `?` and navi
-answers, already knowing what you just ran and what it printed.**
+**A bash shell with an agent living inside it.** navi sees your terminal as
+you do: what you ran, where, how it ended and what it printed. Start a line
+with `?` to hand it any task. It can read and edit files, run commands and
+search the web, and it asks before it changes anything.
 
 ```
-~/proj $ python3 app.py
-json.decoder.JSONDecodeError: Expecting property name … (char 1)
-? to ask why
-~/proj 1 $ ?
-│ · read what `python3 app.py` printed
-│ The JSON in app.py is malformed: `"{bad"` is not an object …
+~/proj $ ?set up a venv and install what app.py needs
+│ · read app.py
+│ · run python3 -m venv .venv && .venv/bin/pip install requests
+│ Done: **requests** is installed in `.venv`. Activate it with:
+
+    source .venv/bin/activate
+
+~/proj $ source .venv/bin/activate      ← typed for you; Enter runs it
 ```
+
+It picks up where you are. After a command fails, `?` alone asks why. To
+point it at a command's output, ask about it (`?what was the exact error`)
+or pipe it in (`npm test |?`).
 
 Every other line is plain bash, run by [brush](https://github.com/reubeno/brush),
 so your commands and scripts keep working and Enter never does anything bash
@@ -36,7 +44,8 @@ only between the `# >>> neosh setup >>>` markers in `~/.neoshrc`.
 
 ## Asking navi
 
-- `?why did that fail` asks about your recent commands. `?` alone, right
+- `?<anything>` is a task or a question: `?find the big files here`,
+  `?rename these photos by date`, `?why did that fail`. `?` alone, right
   after a failure, asks why and how to fix it.
 - `cmd |?question` hands navi the output too: `npm test |?why does this fail`.
 - If the answer ends with a command, it is typed at your next prompt: Enter
