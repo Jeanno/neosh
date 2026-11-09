@@ -203,9 +203,16 @@ hands a line to another shell. What neosh adds is below.
   sets them, as bash's are. A value below zero, or not a number, keeps
   everything; `HISTFILESIZE` is applied when the shell exits, a timestamp
   line (`HISTTIMEFORMAT`) going with its command.
-- NSH-9: `?` alone says how to ask navi, unless the command just run
-  failed: then it asks navi why, and how to fix it (NSH-20). With no `navi` on `$PATH`, a line
+- NSH-9: `?` alone turns navi mode on (NSH-54), and when the command just
+  run failed, asks navi why, and how to fix it (NSH-20), first. With no `navi` on `$PATH`, a line
   for navi says so and how to install it, and runs nothing.
+- NSH-54: In navi mode every line is a question for navi, as if typed after
+  `?`, whatever it holds (a glob, a quote, a `|`), and the prompt's `$`
+  shows as `?` (or `? ` follows a prompt of one's own). Esc goes back to
+  the shell, keeping what was typed so far at the prompt; so do `exit` and
+  ^D, which leave the shell running. An empty line asks nothing. History
+  keeps each question with its `?`, so outside the mode it asks again. Esc
+  otherwise does what it always did.
 
 - NSH-11: When navi's answer ends with a command to run (CLI-41), the next
   prompt starts with it typed out, the cursor at its end: Enter runs it, as

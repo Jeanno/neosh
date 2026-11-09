@@ -223,14 +223,8 @@ impl Recent {
 /// What `?` alone asks right after a command failed (NSH-9).
 pub const WHY_FAILED: &str = "why did my last command fail, and how do I fix it?";
 
-/// What `?` alone says (NSH-9).
-pub const HELP: &str = "\
-Ask navi: start a line with ? (?find the biggest files here), or type ?
-alone after a command fails. navi sees the commands you ran since it last
-answered and asks before it changes anything. Pipe output to it with |?
-(npm test |?why). A sentence typed as a command comes back as a question
-for Enter to ask. NEOSH_ASK=sentences also sends sentences that are no
-command, and NEOSH_ASK=off nothing.";
+/// What `?` alone says as navi mode starts (NSH-54).
+pub const MODE_NOTE: &str = "· navi mode: each line goes to navi, which sees what you ran and asks before changing anything. Esc to go back to the shell.";
 
 /// What the first sentence sent to navi in a session says first (NSH-19).
 pub const SENTENCE_NOTE: &str = "\x1b[2m· a sentence goes to navi (NEOSH_ASK=sentences); `command <line>` runs it instead\x1b[0m";

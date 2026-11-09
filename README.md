@@ -45,8 +45,10 @@ only between the `# >>> neosh setup >>>` markers in `~/.neoshrc`.
 ## Asking navi
 
 - `?<anything>` is a task or a question: `?find the big files here`,
-  `?rename these photos by date`, `?why did that fail`. `?` alone, right
-  after a failure, asks why and how to fix it.
+  `?rename these photos by date`, `?why did that fail`.
+- `?` alone starts **navi mode**: every line goes to navi, no `?` needed,
+  until Esc (or `exit`) takes you back to the shell. Right after a failure,
+  it first asks why.
 - `cmd |?question` hands navi the output too: `npm test |?why does this fail`.
 - If the answer ends with a command, it is typed at your next prompt: Enter
   runs it, ^C clears it.

@@ -101,8 +101,8 @@ fn a_sentence_runs_as_a_command_then_waits_as_a_question() {
 #[test]
 fn the_offered_question_can_be_cleared_and_nothing_is_sent() {
     let home = Home::new("cleared");
-    let screen = home.run(&["show me the files", "\u{15}true", "?", "NEOSH_ASK=off", "show me the files", "? hi", "exit"], &[]);
-    assert!(screen.contains("Ask navi: start a line with ?"), "{screen}");
+    let screen = home.run(&["show me the files", "\u{15}true", "?", "@esc", "NEOSH_ASK=off", "show me the files", "? hi", "exit"], &[]);
+    assert!(screen.contains("navi mode: each line goes to navi"), "{screen}");
     assert_eq!(screen.matches("show: command not found").count(), 2, "{screen}");
     assert_eq!(home.log(), "");
 }
@@ -177,17 +177,39 @@ fn a_quote_in_a_question_does_not_hold_it_open() {
     assert!(screen.contains("held\nclosed"), "{screen}");
 }
 
-// NSH-9
+// NSH-9, NSH-54
 #[test]
 fn a_question_mark_alone_after_a_failure_asks_why() {
     let home = Home::new("why");
-    let screen = home.run(&["?", "ls missing-folder", "?", "true", "?", "exit"], &[]);
+    let screen = home.run(&["ls missing-folder", "?", "@esc", "true", "?", "@esc", "exit"], &[]);
     let log = home.log();
     assert_eq!(log.matches("ARGS:").count(), 1, "{log}");
     assert!(log.contains("-p why did my last command fail"), "{log}");
     assert!(log.contains("~/work $ ls missing-folder (exit 1, printed 1 line: "), "{log}");
-    // Before the failure, and after a command that worked: how to ask.
-    assert_eq!(screen.matches("Ask navi: start a line with ?").count(), 2, "{screen}");
+    // Each time, the mode begins; after a command that worked, nothing is asked.
+    assert_eq!(screen.matches("navi mode: each line goes to navi").count(), 2, "{screen}");
+}
+
+// NSH-54
+#[test]
+fn navi_mode_sends_every_line_until_esc() {
+    let home = Home::new("mode");
+    let screen = home.run(
+        &["?", "what is here", "*.txt and it's |", "", "@type abc", "@esc", "", "?", "exit", "echo back-in-the-shell", "exit"],
+        &[],
+    );
+    let log = home.log();
+    assert!(log.contains("-p what is here"), "{log}");
+    assert!(log.contains("-p *.txt and it's |"), "{log}");
+    // The third: `?` right after `abc` failed asks why, then the mode begins.
+    assert_eq!(log.matches("ARGS:").count(), 3, "{log}");
+    assert!(screen.contains("~/work ? what is here"), "{screen}");
+    // Esc kept what was typed, for the shell to run.
+    assert!(screen.contains("abc: command not found"), "{screen}");
+    // `exit` left the mode, not the shell.
+    assert!(screen.contains("back-in-the-shell"), "{screen}");
+    let history = std::fs::read_to_string(home.0.join(".neosh_history")).unwrap_or_default();
+    assert!(history.contains("?what is here"), "{history}");
 }
 
 // NSH-24
@@ -284,7 +306,7 @@ fn history_is_as_long_as_histsize_and_histfilesize_say() {
 fn a_line_for_navi_sets_the_status_as_a_command_does() {
     let home = Home::new("status");
     let screen = home.run(
-        &["false", "? why", "echo after-answer $?", "? you cannot answer", "echo after-failure $?", "false", "?", "echo after-why $?", "true", "?", "echo after-help $?", "exit"],
+        &["false", "? why", "echo after-answer $?", "? you cannot answer", "echo after-failure $?", "false", "?", "@esc", "echo after-why $?", "true", "?", "@esc", "echo after-help $?", "exit"],
         &[],
     );
     let lines: Vec<&str> = screen.lines().map(str::trim).collect();

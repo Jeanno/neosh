@@ -465,6 +465,8 @@ fn translate_input_function_to_reedline_event(
         InputFunction::Undo => Some(ReedlineEvent::Edit(vec![EditCommand::Undo])),
         InputFunction::ClearScreen => Some(ReedlineEvent::ClearScreen),
         InputFunction::AcceptLine => Some(ReedlineEvent::Enter),
+        // neosh: so Esc can be given back its own job (NEOSH.md).
+        InputFunction::Abort => Some(ReedlineEvent::Esc),
         InputFunction::HistorySearchBackward => Some(ReedlineEvent::SearchHistory),
         InputFunction::RedrawCurrentLine => Some(ReedlineEvent::Repaint),
         InputFunction::Complete => Some(ReedlineEvent::Edit(vec![EditCommand::Complete])),

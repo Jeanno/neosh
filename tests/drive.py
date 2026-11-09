@@ -1,5 +1,6 @@
 # Drives an interactive program on a pseudo-terminal, as a person would:
 # each line is typed once the output goes quiet, `@wait N` waits N seconds,
+# `@type TEXT` types without Enter, `@esc` presses Esc alone,
 # and the cursor-position queries a line editor makes are answered. Prints
 # what the screen showed, escape sequences taken out.
 #
@@ -30,6 +31,9 @@ pump(1.5)
 for l in lines:
     if l.startswith('@wait '):
         pump(float(l.split()[1])); continue
+    if l.startswith('@type ') or l == '@esc':
+        os.write(fd, l[6:].encode() if l != '@esc' else b'\x1b')
+        pump(1.2); continue
     os.write(fd, l.encode() + b'\r')
     if not pump(1.2): break
 pump(1)

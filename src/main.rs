@@ -17,6 +17,7 @@ mod term;
 
 use std::io::{IsTerminal as _, Write as _};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use brush_builtins::ShellBuilderExt as _;
@@ -411,9 +412,36 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                 let end = command.len();
                 self.inner.set_read_buffer(command, end);
             }
+            // NSH-54: in navi mode the prompt ends in `?`.
+            let in_mode = NAVI_MODE.load(Ordering::Relaxed);
+            let again = if in_mode { InteractivePrompt { prompt: navi_prompt(&again.prompt), ..again } } else { again };
             let read = self.inner.read_line(shell, again)?;
-            let ReadResult::Input(mut line) = read else { return Ok(read) };
             let mut guard = shell.try_lock().ok();
+            let mut line = match read {
+                ReadResult::Input(line) => line,
+                // NSH-54: Esc, or ^D, leaves navi mode, and the shell stays.
+                ReadResult::BoundCommand(command) if command.contains(LEAVE_NAVI_MODE) => {
+                    navi_mode(guard.as_deref_mut(), false);
+                    continue;
+                }
+                ReadResult::Eof if in_mode => {
+                    navi_mode(guard.as_deref_mut(), false);
+                    continue;
+                }
+                read => return Ok(read),
+            };
+            // NSH-54: in navi mode a line is a question, as if typed after `?`.
+            if in_mode {
+                let typed = line.trim().to_string();
+                if typed.is_empty() {
+                    continue;
+                }
+                if typed == "exit" {
+                    navi_mode(guard.as_deref_mut(), false);
+                    continue;
+                }
+                line = format!("?{typed}\n");
+            }
             // NSH-24: `!!` and the rest, before anything reads the line.
             let history = guard.as_ref().filter(|s| s.options().enable_bang_style_history_substitution).map(|s| -> Vec<String> { s.history().map(|h| h.iter().map(|i| i.command_line.clone()).collect()).unwrap_or_default() });
             if let Some(history) = history {
@@ -455,7 +483,10 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                 }
                 _ => {}
             }
-            let what = navi::classify_in(&line, ask, |word| guard.as_mut().is_none_or(|s| is_command(s, word)), |word| navi::globs_a_file(word, &dir));
+            let what = match in_mode {
+                true => navi::Line::Navi(line.trim()[1..].trim().to_string()),
+                false => navi::classify_in(&line, ask, |word| guard.as_mut().is_none_or(|s| is_command(s, word)), |word| navi::globs_a_file(word, &dir)),
+            };
             match what {
                 navi::Line::Shell => {
                     if !line.trim().is_empty() {
@@ -519,6 +550,12 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                     return Ok(ReadResult::Input(ran));
                 }
                 navi::Line::Navi(ask) => {
+                    // NSH-54: `?` alone turns navi mode on, after asking why a failure failed.
+                    if ask.is_empty() && !in_mode {
+                        navi_mode(guard.as_deref_mut(), true);
+                        let color = guard.as_ref().is_some_and(|s| s.env_str("NO_COLOR").is_none());
+                        println!("{}", if color { format!("\x1b[2m{}\x1b[0m", navi::MODE_NOTE) } else { navi::MODE_NOTE.to_string() });
+                    }
                     // NSH-8: kept as typed, if bash would keep it (NSH-26).
                     if let Some(s) = guard.as_mut() {
                         let _ = s.add_to_history(line.trim_end_matches('\n'));
@@ -538,7 +575,6 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                     let ask = match ask.is_empty() {
                         true if self.recent.last_failed() => navi::WHY_FAILED.to_string(),
                         true => {
-                            println!("{}", navi::HELP);
                             ended(0);
                             continue;
                         }
@@ -651,9 +687,39 @@ fn autocd<SE: brush_core::ShellExtensions>(shell: &mut brush_core::Shell<SE>, li
 }
 
 /// NSH-4: whether a word runs something: a keyword, alias, function, builtin or program.
+/// NSH-54: whether every line goes to navi, until Esc.
+static NAVI_MODE: AtomicBool = AtomicBool::new(false);
+/// What Esc is bound to while navi mode is on.
+const LEAVE_NAVI_MODE: &str = "neosh-leave-navi-mode";
+
+/// NSH-54: navi mode on or off, Esc bound to leave it while it is on and
+/// given back its own job after.
+fn navi_mode<SE: brush_core::ShellExtensions>(shell: Option<&mut brush_core::Shell<SE>>, on: bool) {
+    use brush_core::interfaces::{InputFunction, Key, KeyAction, KeySequence, KeyStroke};
+    NAVI_MODE.store(on, Ordering::Relaxed);
+    let Some(bindings) = shell.and_then(|s| s.key_bindings().cloned()) else { return };
+    let esc = KeySequence::Strokes(vec![KeyStroke { alt: false, control: false, shift: false, key: Key::Escape }]);
+    let action = if on { KeyAction::ShellCommand(LEAVE_NAVI_MODE.to_string()) } else { KeyAction::DoInputFunction(InputFunction::Abort) };
+    let _ = tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(bindings.lock())).bind(esc, action);
+}
+
+/// NSH-54: the prompt with its `$` (or `#`) turned to `?`, or `? ` after it.
+fn navi_prompt(prompt: &str) -> String {
+    let ansi = regex::Regex::new(r"\x1b\[[0-9;]*m").unwrap();
+    if let Some(at) = prompt.rfind(['$', '#']) {
+        if ansi.replace_all(&prompt[at + 1..], "").trim().is_empty() {
+            return format!("{}?{}", &prompt[..at], &prompt[at + 1..]);
+        }
+    }
+    format!("{prompt}? ")
+}
+
 /// NSH-53: a line for navi is complete when Enter is pressed, though a `'`
 /// in it (`?what's wrong`) would leave bash waiting for the quote's end.
 fn completes(line: &str, shell: &mut dyn std::any::Any) -> bool {
+    if NAVI_MODE.load(Ordering::Relaxed) {
+        return true;
+    }
     let Some(shell) = shell.downcast_mut::<brush_core::Shell<errors::Extensions>>() else { return false };
     let ask = navi::Ask::from_setting(shell.env_str("NEOSH_ASK").as_deref());
     let dir = shell.working_dir().to_path_buf();
@@ -672,6 +738,15 @@ fn is_command<SE: brush_core::ShellExtensions>(shell: &mut brush_core::Shell<SE>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // NSH-54
+    #[test]
+    fn navi_mode_s_prompt_ends_in_a_question_mark() {
+        assert_eq!(navi_prompt("~/proj $ "), "~/proj ? ");
+        assert_eq!(navi_prompt("\x1b[1;34m~/proj\x1b[0m 1 $\x1b[0m "), "\x1b[1;34m~/proj\x1b[0m 1 ?\x1b[0m ");
+        assert_eq!(navi_prompt("❯ "), "❯ ? ");
+        assert_eq!(navi_prompt("$HOME> "), "$HOME> ? ");
+    }
 
     fn argv(s: &[&str]) -> Vec<String> {
         s.iter().map(|a| a.to_string()).collect()
