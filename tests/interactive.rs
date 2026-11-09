@@ -25,6 +25,8 @@ impl Home {
         std::fs::write(&navi, STAND_IN).unwrap();
         use std::os::unix::fs::PermissionsExt as _;
         std::fs::set_permissions(&navi, std::fs::Permissions::from_mode(0o755)).unwrap();
+        // So neosh does not offer setup (NSH-47); the tests of setup take it out.
+        std::fs::write(home.join(".neoshrc"), "").unwrap();
         Home(home)
     }
 
@@ -305,4 +307,46 @@ fn autocd_cdspell_and_the_terminal_size_work_as_in_bash() {
     // History keeps the line as typed.
     assert!(lines.iter().any(|l| l.ends_with(" ..") && l.starts_with(char::is_numeric)), "{screen}");
     assert!(!lines.iter().any(|l| l.ends_with("cd -- ..") && l.starts_with(char::is_numeric)), "{screen}");
+}
+
+// NSH-47
+#[test]
+fn a_first_start_offers_setup_and_never_means_never() {
+    let home = Home::new("never");
+    std::fs::remove_file(home.0.join(".neoshrc")).unwrap();
+    let screen = home.run(&["n", "echo still-here", "exit"], &[]);
+    assert!(screen.contains("Set neosh up now? [Y]es, [l]ater, [n]ever"), "{screen}");
+    assert!(screen.contains("still-here"), "{screen}");
+    let rc = std::fs::read_to_string(home.0.join(".neoshrc")).unwrap();
+    assert!(rc.starts_with('#') && rc.contains("neosh --setup"), "{rc}");
+    let screen = home.run(&["exit"], &[]);
+    assert!(!screen.contains("Set neosh up now?"), "{screen}");
+}
+
+// NSH-47
+#[test]
+fn later_writes_nothing_and_asks_again() {
+    let home = Home::new("later");
+    std::fs::remove_file(home.0.join(".neoshrc")).unwrap();
+    let screen = home.run(&["l", "exit"], &[]);
+    assert!(screen.contains("offered next time"), "{screen}");
+    assert!(!home.0.join(".neoshrc").exists());
+}
+
+// NSH-47 to NSH-50
+#[test]
+fn setup_at_first_start_runs_navi_s_and_copies_zsh_s_look_at_once() {
+    let home = Home::new("firstsetup");
+    std::fs::remove_file(home.0.join(".neoshrc")).unwrap();
+    std::fs::write(home.0.join(".zshrc"), "PROMPT='%n-zsh-look %# '\nRPROMPT='%T'\nexport LSCOLORS=Gxfxcxdxbxegedabagacad\n").unwrap();
+    let zdotdir = home.0.display().to_string();
+    let screen = home.run(&["y", "y", "2", "y", "echo $LSCOLORS", "exit"], &[("ZDOTDIR", &zdotdir)]);
+    assert!(home.log().contains("ARGS: setup"), "{}", home.log());
+    assert!(screen.contains("RPROMPT"), "{screen}");
+    let rc = std::fs::read_to_string(home.0.join(".neoshrc")).unwrap();
+    assert!(rc.contains("PS1='\\u-zsh-look \\$ '"), "{rc}");
+    assert!(rc.contains("export LSCOLORS='Gxfxcxdxbxegedabagacad'"), "{rc}");
+    // It counts at once: the prompt is zsh's, and the colours are there.
+    assert!(screen.contains("-zsh-look $ echo"), "{screen}");
+    assert!(screen.contains("\nGxfxcxdxbxegedabagacad"), "{screen}");
 }

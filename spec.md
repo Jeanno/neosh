@@ -20,7 +20,9 @@ hands a line to another shell. What neosh adds is below.
   a script; with stdin not a terminal it reads commands from stdin. `-l`, or
   being started as `-neosh` (as a login shell is), reads `~/.profile` first.
 - NSH-2: The exit status is the last command's, and `exit [n]` leaves with
-  n. `--version` and `--help` say what neosh is and how to start it.
+  n. `--version` and `--help` say what neosh is and how to start it. A
+  script that is not there says so as bash does (`neosh: x.sh: No such file
+  or directory`, status 127).
 
 - NSH-14: `install.sh` builds neosh and puts it in `~/.local/bin`
   (`NEOSH_BIN_DIR`), from the checkout it is in or, piped from curl, a clone
@@ -28,6 +30,46 @@ hands a line to another shell. What neosh adds is below.
   updates; `--uninstall` removes it. It replaces or removes only a neosh,
   leaves history and `~/.neoshrc` alone, and never changes the login shell
   or `/etc/shells`: it says how.
+
+## Setup
+
+- NSH-47: Setup gets neosh ready in the terminal, a step at a time, each one
+  skippable: the model navi answers with, then neosh's look. As zsh's
+  first-run setup does, it is offered when an interactive neosh starts with
+  no `~/.neoshrc` (and no `--norc`): yes runs it, later asks again next
+  time, never writes a `~/.neoshrc` holding only a comment, so it is not
+  asked again. `neosh --setup` runs it any time, and run again it changes
+  what it set. `neosh setup` is bash's, the script named `setup`. Without a
+  terminal `--setup` says so and exits 1, unless every choice is given
+  (NSH-51).
+- NSH-48: The model step runs `navi setup` (SET-1 to SET-27) and goes on
+  when it is done. With no `navi` on `$PATH` it says navi is what answers
+  `?` and how to install it, and goes on.
+- NSH-49: The look step offers neosh's own look (the default) or your
+  zsh's. For zsh's, neosh asks zsh for its prompt and colours as your zsh
+  starts (reading `~/.zshrc`, with no terminal, at most 5 seconds):
+  - starship in zsh gives `eval "$(starship init bash)"`, the same prompt;
+  - a `PROMPT` of zsh's escapes is written as bash's `PS1`: `%n` `%m` `%M`
+    `%~` `%d` `%/` `%c` `%.` `%1~` `%#` `%?` `%j` `%h` `%!` `%l` `%T` `%t`
+    `%@` `%*` `%D` `%D{…}` `%%` `%)`, colours and styles (`%F{…}` `%f`
+    `%K{…}` `%k` `%B` `%b` `%U` `%u` `%S` `%s`, by name, number or
+    `#rrggbb`) and `%{…%}`; `RPROMPT` is left out, bash having no right
+    prompt, and said so;
+  - a prompt it cannot write as bash's (one that runs commands or
+    functions, `%(…)` conditions, or a theme: oh-my-zsh's, powerlevel10k)
+    is named, with why, and neosh's own prompt is kept, which shows the
+    branch and a failed status as most themes do;
+  - `CLICOLOR`, `LSCOLORS` and `LS_COLORS`, when zsh sets them, are kept,
+    so `ls` is coloured as in zsh.
+- NSH-50: What setup would write is shown first and written only on yes,
+  into `~/.neoshrc` between `# >>> neosh setup >>>` and
+  `# <<< neosh setup <<<`, replacing what an earlier setup wrote there and
+  nothing else; neosh's own look writes no prompt lines. It counts from
+  the next neosh, or after `source ~/.neoshrc`; offered at start, it counts
+  at once.
+- NSH-51: `neosh --setup --look zsh` or `--look neosh` makes the look choice
+  and skips the model step; with `--yes` it also writes without asking, so
+  it runs without a terminal.
 
 ## The language
 

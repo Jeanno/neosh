@@ -10,6 +10,7 @@ mod histctl;
 mod histsize;
 mod navi;
 mod prompt;
+mod setup;
 mod term;
 
 use std::io::{IsTerminal as _, Write as _};
@@ -21,6 +22,7 @@ use brush_interactive::{InputBackend, InteractivePrompt, ReadResult, ShellError,
 
 const USAGE: &str = "\
 usage: neosh [-l] [--norc] [-c '<commands>' [name [args…]] | <script> [args…]]
+       neosh --setup [--look zsh|neosh] [--yes]
 
 neosh is a bash-compatible shell with navi inside: start a line with ? to
 ask navi, or write a sentence that is not a command.
@@ -28,6 +30,7 @@ ask navi, or write a sentence that is not a command.
   -c COMMANDS  run the commands and exit with the last one's status
   -l, --login  read ~/.profile first, as a login shell does
   --norc       do not read ~/.neoshrc
+  --setup      choose navi's model and neosh's look (zsh's or neosh's own)
   --version    say which neosh this is";
 
 /// What the command line asked for (NSH-1).
@@ -78,6 +81,22 @@ fn main() {
         println!("{USAGE}");
         return;
     }
+    let rc = std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".neoshrc"));
+    // NSH-47, NSH-51: setup, then nothing else.
+    if argv.get(1).is_some_and(|a| a == "--setup") {
+        let Some(rc) = rc else {
+            eprintln!("neosh: --setup writes ~/.neoshrc, and HOME is not set");
+            std::process::exit(1);
+        };
+        let code = match setup::parse(&argv[2..]) {
+            Ok(options) => setup::run(&options, &rc),
+            Err(e) => {
+                eprintln!("neosh: {e}\n{USAGE}");
+                2
+            }
+        };
+        std::process::exit(code);
+    }
     let args = match parse_args(&argv) {
         Ok(a) => a,
         Err(e) => {
@@ -85,6 +104,11 @@ fn main() {
             std::process::exit(2);
         }
     };
+    // NSH-47: offered once a terminal session starts with no ~/.neoshrc.
+    let terminal = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+    if let Some(rc) = rc.filter(|rc| terminal && args.command.is_none() && args.rest.is_empty() && !args.norc && !rc.exists()) {
+        setup::offer(&rc);
+    }
     let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("a runtime");
     let code = runtime.block_on(run(args)).unwrap_or_else(|e| {
         eprintln!("neosh: {e}");
@@ -145,6 +169,11 @@ async fn run(args: Args) -> Result<u8, ShellError> {
     if let Some(command) = args.command {
         shell.lock().await.run_dash_c_command(command).await?;
     } else if let Some(script) = args.rest.first() {
+        // NSH-2: said as bash says it, not as brush's "failed to source file".
+        if !std::path::Path::new(script).exists() {
+            eprintln!("neosh: {script}: No such file or directory");
+            return Ok(127);
+        }
         shell.lock().await.run_script(std::path::Path::new(script), args.rest.iter().skip(1)).await?;
     } else if interactive {
         // NSH-18: VS Code's command marks, where brush finds them supported.

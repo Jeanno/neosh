@@ -78,6 +78,25 @@ From a checkout, `./install.sh` builds the code you have. Either way
 you get `neosh` in `~/.local/bin`; run the installer again to update, or pass
 `--uninstall` to remove it (`… | sh -s -- --uninstall`). Then type `neosh`.
 
+## Setup
+
+The first time neosh starts with no `~/.neoshrc`, it offers setup: yes,
+later (asked again next time) or never. `neosh --setup` runs it any time.
+Two steps, each skippable:
+
+1. **The model** navi answers with: it runs `navi setup`.
+2. **The look**: neosh's own, or your zsh's. neosh asks your zsh for its
+   prompt and translates it to `PS1` (colours, `%n@%m`, `%~`, the time and
+   the rest); a starship prompt becomes starship's bash prompt. A prompt
+   bash cannot draw (powerlevel10k, or one that runs commands as it is
+   drawn) is named and neosh's own prompt kept. `CLICOLOR`, `LSCOLORS` and
+   `LS_COLORS` come too.
+
+It shows what it will write, then writes only between
+`# >>> neosh setup >>>` and `# <<< neosh setup <<<` in `~/.neoshrc`,
+leaving the rest as it was. Without a terminal:
+`neosh --setup --look zsh --yes`.
+
 `neosh -c '…'`, `neosh script.sh` and commands on stdin work as in bash.
 An interactive neosh reads `~/.neoshrc`; `-l` (or starting as `-neosh`)
 also reads `~/.profile`. neosh does not add itself to `/etc/shells` or
