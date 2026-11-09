@@ -5,13 +5,9 @@ Newest asks first. Done items move to the log at the bottom.
 
 ## Now
 
-- Live-test images (TL-45) and resume (NSH-55) once Darkbloom answers.
 
 ## Next
 
-- Live-test CLI-44 (markdown and tool calls in words) against the real
-  model. Darkbloom answered 429 "capacity temporarily unavailable" through
-  2026-11-09; retry and check the README example matches the real output.
 - `[1]+ Done` printed after ^C on a job brought back with `fg` (brush).
 - Where the "? to ask why" hint sits, and the setup prompts' styling.
 - Tool calls with no words yet (most `browser_*`): give them some.
@@ -27,6 +23,8 @@ Newest asks first. Done items move to the log at the bottom.
 
 ## Done
 
+- 2026-11-09: live-tested on Sonnet (Darkbloom was at capacity): an image
+  read, a command's recorded output read, `?/resume`, tool calls in words.
 - 2026-11-09: `?/resume` picks up an earlier shell's conversation (NSH-55, SES-18).
 - 2026-11-09: navi looks at an image given as a path, and reads a PDF (TL-45).
 - 2026-11-09: navi mode, `?` alone until Esc (NSH-54).
