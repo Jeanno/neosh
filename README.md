@@ -14,7 +14,9 @@ stays a glob.
 
 navi is told the commands you ran since it last answered, with where they ran
 and how they ended, and answers in your terminal, in the shell's directory,
-asking before it changes anything. To show navi what a command printed, its errors too, pipe it to `?`:
+asking before it changes anything. Its answer is drawn in a dim `│` gutter
+so it stands apart from what your commands printed; a code block is drawn
+without it, so it copies clean. To show navi what a command printed, its errors too, pipe it to `?`:
 
 ```
 ~/proj $ npm test |?why does this fail

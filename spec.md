@@ -157,7 +157,9 @@ hands a line to another shell. What neosh adds is below.
 - NSH-5: navi answers in the terminal as the `navi` CLI does (`navi -p`), in
   the shell's directory, with its approvals, and gives the prompt back when
   it has answered (CLI-38). ^C stops it and never the shell, from the
-  first line of a session on.
+  first line of a session on. Its answer is drawn in a dim `│` gutter
+  (CLI-43), so it stands apart from what commands printed, a code block
+  without it so it copies clean.
 - NSH-16: A command line ending in `| ?`, with a question or without
   (`npm test |?why does this fail`, `npm test | ? why`), runs the command and hands navi what
   it printed, its errors too, with the question (or, alone, a request to

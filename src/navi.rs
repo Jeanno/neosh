@@ -251,6 +251,7 @@ pub fn ask(navi: &Path, path: Option<&str>, prompt: &str, dir: &Path, session: &
         .args(["--once", "--session", session, "-p", prompt])
         .current_dir(dir)
         .env("NAVI_COMMAND_FILE", &handed)
+        .env("NAVI_GUTTER", "1")
         .env("NEOROUTER_SEEN", seen_file(session));
     if let Some(path) = path {
         command.env("PATH", path);
@@ -297,7 +298,7 @@ pub fn piped_line(command: &str, question: &str, navi: &Path, session: &str, rec
     let ask = if question.is_empty() { PIPED_ASK } else { question };
     let recent = if recent.is_empty() { String::new() } else { format!("NAVI_RECENT={} ", quote(recent)) };
     format!(
-        "{{ {command}\n}} 2>&1 | {recent}NAVI_COMMAND_FILE={} NEOROUTER_SEEN={} {} --session {} -a - -p {}",
+        "{{ {command}\n}} 2>&1 | {recent}NAVI_COMMAND_FILE={} NAVI_GUTTER=1 NEOROUTER_SEEN={} {} --session {} -a - -p {}",
         quote(&file.to_string_lossy()),
         quote(&seen_file(session).to_string_lossy()),
         quote(&navi.to_string_lossy()),
@@ -440,7 +441,7 @@ mod tests {
         let seen = seen_file("neosh-1");
         assert_eq!(
             line,
-            format!("{{ npm test\n}} 2>&1 | NAVI_RECENT='~ $ ls (ok)' NAVI_COMMAND_FILE='/tmp/c' NEOROUTER_SEEN='{}' '/bin/navi' --session 'neosh-1' -a - -p 'why'\\''s it red'", seen.display())
+            format!("{{ npm test\n}} 2>&1 | NAVI_RECENT='~ $ ls (ok)' NAVI_COMMAND_FILE='/tmp/c' NAVI_GUTTER=1 NEOROUTER_SEEN='{}' '/bin/navi' --session 'neosh-1' -a - -p 'why'\\''s it red'", seen.display())
         );
         assert!(piped_line("ls", "", Path::new("navi"), "s", "", Path::new("f")).ends_with(&format!("-p '{PIPED_ASK}'")));
     }
