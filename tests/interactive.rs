@@ -7,6 +7,7 @@ use std::process::Command;
 /// Logs its arguments, directory, what it was told and what was piped in; a
 /// prompt asking for a suggestion hands one back (CLI-41).
 const STAND_IN: &str = r#"#!/bin/sh
+[ "$1" = sessions ] && { cat "$HOME/sessions.json" 2>/dev/null; exit 0; }
 { echo "ARGS: $*"; echo "PWD: $PWD"; printf 'RECENT: %s\n' "$NAVI_RECENT"; echo "INDEX: $NAVI_SHELL_INDEX"; [ -t 0 ] || echo "STDIN: $(cat)"; echo ---; } >> "$HOME/navi.log"
 [ -n "$NAVI_SHELL_INDEX" ] && rm -rf "$HOME/rec" && cp -R "$(dirname "$NAVI_SHELL_INDEX")" "$HOME/rec"
 case "$*" in *suggest*) echo 'echo suggested-ran' > "$NAVI_COMMAND_FILE" ;; esac
@@ -188,6 +189,28 @@ fn a_question_mark_alone_after_a_failure_asks_why() {
     assert!(log.contains("~/work $ ls missing-folder (exit 1, printed 1 line: "), "{log}");
     // Each time, the mode begins; after a command that worked, nothing is asked.
     assert_eq!(screen.matches("navi mode: each line goes to navi").count(), 2, "{screen}");
+}
+
+// NSH-55
+#[test]
+fn resume_takes_up_an_earlier_conversation() {
+    let home = Home::new("resume");
+    let screen = home.run(&["?/resume", "? hi", "exit"], &[]);
+    assert!(screen.contains("No earlier conversation with navi to resume."), "{screen}");
+    std::fs::write(
+        home.0.join("sessions.json"),
+        concat!(
+            r#"{"name":"neosh-7-1","cwd":"/tmp/a","messages":4,"used":"x","ago":"5 min ago","last":"why is it slow"}"#, "\n",
+            r#"{"name":"neosh-6-1","cwd":"/tmp/b","messages":9,"used":"x","ago":"2 h ago","last":"set up a venv"}"#, "\n",
+        ),
+    )
+    .unwrap();
+    let screen = home.run(&["?/resume", "2", "? and now", "exit"], &[]);
+    assert!(screen.contains("1  5 min ago"), "{screen}");
+    assert!(screen.contains("set up a venv"), "{screen}");
+    assert!(screen.contains("· continuing (9 messages from /tmp/b)"), "{screen}");
+    let log = home.log();
+    assert!(log.contains("--session neosh-6-1 -p and now"), "{log}");
 }
 
 // NSH-54

@@ -550,6 +550,43 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                     return Ok(ReadResult::Input(ran));
                 }
                 navi::Line::Navi(ask) => {
+                    // NSH-55: `?/resume` takes up a conversation an earlier neosh had.
+                    if ask == "/resume" {
+                        let found = guard.as_ref().and_then(|s| s.find_first_executable_in_path("navi"));
+                        let path = guard.as_ref().and_then(|s| s.env_str("PATH").map(|p| p.into_owned()));
+                        drop(guard);
+                        let Some(found) = found else {
+                            eprintln!("{}", navi::NOT_INSTALLED);
+                            continue;
+                        };
+                        let saved = navi::saved(&found, path.as_deref(), &self.session);
+                        if saved.is_empty() {
+                            println!("No earlier conversation with navi to resume.");
+                            continue;
+                        }
+                        let home = std::env::var_os("HOME").map(PathBuf::from);
+                        for (i, s) in saved.iter().take(9).enumerate() {
+                            println!("{}", navi::saved_line(i + 1, s, home.as_deref()));
+                        }
+                        print!("resume which? [1] ");
+                        let _ = std::io::stdout().flush();
+                        let mut answer = String::new();
+                        let read = std::io::stdin().read_line(&mut answer);
+                        let pick = match answer.trim() {
+                            "" if read.is_ok_and(|n| n > 0) => Some(0),
+                            n => n.parse::<usize>().ok().filter(|n| (1..=saved.len().min(9)).contains(n)).map(|n| n - 1),
+                        };
+                        match pick {
+                            Some(i) => {
+                                let s = &saved[i];
+                                self.session = s.name.clone();
+                                let at = s.cwd.as_deref().map(|d| format!(" from {}", prompt::tilde(d, home.as_deref()))).unwrap_or_default();
+                                println!("\x1b[2m· continuing ({} message{}{at})\x1b[0m", s.messages, if s.messages == 1 { "" } else { "s" });
+                            }
+                            None => println!("Not resumed."),
+                        }
+                        continue;
+                    }
                     // NSH-54: `?` alone turns navi mode on, after asking why a failure failed.
                     if ask.is_empty() && !in_mode {
                         navi_mode(guard.as_deref_mut(), true);

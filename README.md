@@ -56,7 +56,8 @@ only between the `# >>> neosh setup >>>` markers in `~/.neoshrc`.
   sentence to navi.
 - The answer is drawn in a dim `│` gutter, with code blocks outside it so
   they copy clean. navi asks before it changes anything.
-- One conversation per shell. `NEOSH_ASK=sentences` also sends lines that
+- One conversation per shell; `?/resume` picks up one an earlier shell had.
+  `NEOSH_ASK=sentences` also sends lines that
   start with no known command; `NEOSH_ASK=off` sends nothing.
 
 ## What gets recorded

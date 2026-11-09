@@ -259,6 +259,52 @@ pub fn ask(navi: &Path, path: Option<&str>, prompt: &str, dir: &Path, session: &
     Ok((status_of(ended), take_suggestion(&handed)))
 }
 
+/// NSH-55: a conversation an earlier neosh had with navi, from `navi sessions --json` (SES-18).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Saved {
+    pub name: String,
+    pub cwd: Option<PathBuf>,
+    pub ago: String,
+    pub messages: u64,
+    pub last: String,
+}
+
+/// NSH-55: neosh's conversations in navi's listing, newest first, this one left out.
+pub fn saved_from(listing: &str, current: &str) -> Vec<Saved> {
+    listing
+        .lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter_map(|v| {
+            let name = v["name"].as_str()?.to_string();
+            (name.starts_with("neosh-") && name != current && v["messages"].as_u64()? > 0).then(|| Saved {
+                cwd: v["cwd"].as_str().map(PathBuf::from),
+                ago: v["ago"].as_str().unwrap_or("").to_string(),
+                messages: v["messages"].as_u64().unwrap_or(0),
+                last: v["last"].as_str().unwrap_or("").to_string(),
+                name,
+            })
+        })
+        .collect()
+}
+
+/// NSH-55: what `navi sessions --json` lists, or nothing when it cannot be run.
+pub fn saved(navi: &Path, path: Option<&str>, current: &str) -> Vec<Saved> {
+    let mut command = Command::new(navi);
+    command.args(["sessions", "--json"]).stdin(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+    if let Some(path) = path {
+        command.env("PATH", path);
+    }
+    command.output().map(|out| saved_from(&String::from_utf8_lossy(&out.stdout), current)).unwrap_or_default()
+}
+
+/// NSH-55: one line of the list `?/resume` shows.
+pub fn saved_line(n: usize, s: &Saved, home: Option<&Path>) -> String {
+    let dir = s.cwd.as_deref().map(|d| crate::prompt::tilde(d, home)).unwrap_or_default();
+    let last: String = s.last.split_whitespace().collect::<Vec<_>>().join(" ");
+    let last = if last.chars().count() > 50 { format!("{}…", last.chars().take(49).collect::<String>()) } else { last };
+    format!("  {n}  {:<12}  {:<16}  {last}", s.ago, dir)
+}
+
 /// NSH-28: a program's end as `$?` says it, 128 and the signal when one stopped it.
 pub fn status_of(ended: std::process::ExitStatus) -> u8 {
     use std::os::unix::process::ExitStatusExt as _;
@@ -482,5 +528,26 @@ mod tests {
         r.push(Ran { line: "true".into(), dir: PathBuf::from("/home/u"), status: 0, took: Default::default(), output: Some(PathBuf::from("/nowhere")) });
         assert_eq!(r.describe(Some(Path::new("/home/u"))), format!("~ $ ls (ok, printed 2 lines: {})\n~ $ true (ok, printed nothing)", kept.display()));
         let _ = std::fs::remove_file(kept);
+    }
+}
+
+#[cfg(test)]
+mod resume_tests {
+    use super::*;
+
+    // NSH-55
+    #[test]
+    fn only_other_neosh_conversations_are_offered() {
+        let listing = concat!(
+            r#"{"name":"neosh-5-1","cwd":"/home/u/proj","messages":14,"used":"x","ago":"12 min ago","last":"why did   app.py fail"}"#, "\n",
+            r#"{"cwd":"/home/u","messages":3,"used":"x","ago":"1 h ago","last":"a navi of its own"}"#, "\n",
+            r#"{"name":"neosh-9-9","cwd":"/w","messages":2,"used":"x","ago":"just now","last":"this shell"}"#, "\n",
+            r#"{"name":"neosh-4-1","messages":0,"used":"x","ago":"2 days ago"}"#, "\n",
+            "not json\n",
+        );
+        let saved = saved_from(listing, "neosh-9-9");
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].name, "neosh-5-1");
+        assert_eq!(saved_line(1, &saved[0], Some(Path::new("/home/u"))), "  1  12 min ago    ~/proj            why did app.py fail");
     }
 }

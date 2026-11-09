@@ -5,7 +5,7 @@ Newest asks first. Done items move to the log at the bottom.
 
 ## Now
 
-- navi can't see an image given as a path: find out why and fix it.
+- Live-test images (TL-45) and resume (NSH-55) once Darkbloom answers.
 
 ## Next
 
@@ -27,6 +27,8 @@ Newest asks first. Done items move to the log at the bottom.
 
 ## Done
 
+- 2026-11-09: `?/resume` picks up an earlier shell's conversation (NSH-55, SES-18).
+- 2026-11-09: navi looks at an image given as a path, and reads a PDF (TL-45).
 - 2026-11-09: navi mode, `?` alone until Esc (NSH-54).
 - 2026-11-09: a quote in a question no longer holds the line open (NSH-53),
   with brush-interactive vendored for the validator hook.
