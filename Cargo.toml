@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "A bash-compatible shell with navi inside"
 license = "MIT"
+repository = "https://github.com/Jeanno/neosh"
 publish = false
 
 [dependencies]

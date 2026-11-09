@@ -67,14 +67,14 @@ command.
 
 ## Install
 
-You need [Rust](https://rustup.rs) to build it and [navi](../README.md#navi-in-the-terminal)
+You need [Rust](https://rustup.rs) to build it and [navi](https://github.com/Jeanno/neoai#navi-in-the-terminal)
 on your `$PATH` to ask anything. One line, no checkout needed:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Jeanno/neoai/master/neosh/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Jeanno/neosh/main/install.sh | sh
 ```
 
-From a checkout, `./neosh/install.sh` builds the code you have. Either way
+From a checkout, `./install.sh` builds the code you have. Either way
 you get `neosh` in `~/.local/bin`; run the installer again to update, or pass
 `--uninstall` to remove it (`… | sh -s -- --uninstall`). Then type `neosh`.
 

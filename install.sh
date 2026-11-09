@@ -2,22 +2,21 @@
 # Builds neosh and puts it on your PATH. Needs Rust (https://rustup.rs), and
 # git when run through curl.
 #
-#   curl -fsSL https://raw.githubusercontent.com/Jeanno/neoai/master/neosh/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/Jeanno/neosh/main/install.sh | sh
 #   ./install.sh               the same, from a checkout you already have
 #
 # Run it again to update; --uninstall removes it. It never changes your login
 # shell or /etc/shells: it says how, when you are ready.
 #
 # The program goes in ~/.local/bin (override with NEOSH_BIN_DIR). Piped from
-# curl, the checkout is cloned to ~/.local/share/neoai (NEOAI_SRC), as navi's
-# installer does.
+# curl, the checkout is cloned to ~/.local/share/neosh (NEOSH_SRC).
 set -eu
 
-repo_url=${NEOAI_REPO:-https://github.com/Jeanno/neoai.git}
-src_dir=${NEOAI_SRC:-"$HOME/.local/share/neoai"}
+repo_url=${NEOSH_REPO:-https://github.com/Jeanno/neosh.git}
+src_dir=${NEOSH_SRC:-"$HOME/.local/share/neosh"}
 bin_dir=${NEOSH_BIN_DIR:-"$HOME/.local/bin"}
 target="$bin_dir/neosh"
-clone_marker="$src_dir/.git/neoai-install"
+clone_marker="$src_dir/.git/neosh-install"
 
 say() { printf '%s\n' "$*"; }
 fail() { printf 'install.sh: %s\n' "$*" >&2; exit 1; }
@@ -54,14 +53,14 @@ if [ -z "$here" ] || [ ! -f "$here/Cargo.toml" ] || [ ! -f "$here/src/main.rs" ]
     say "Updating ${src_dir}…"
     git -C "$src_dir" pull --ff-only --quiet || fail "could not update $src_dir"
   elif [ -e "$src_dir" ]; then
-    fail "$src_dir already exists and was not cloned by this script. Remove it, or set NEOAI_SRC."
+    fail "$src_dir already exists and was not cloned by this script. Remove it, or set NEOSH_SRC."
   else
-    say "Downloading neoai to ${src_dir}…"
+    say "Downloading neosh to ${src_dir}…"
     mkdir -p "$(dirname "$src_dir")"
     git clone --depth 1 --quiet "$repo_url" "$src_dir" || fail "could not clone $repo_url"
     touch "$clone_marker"
   fi
-  here="$src_dir/neosh"
+  here="$src_dir"
 fi
 
 say "Building neosh (the first build takes a minute or two)…"

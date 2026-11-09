@@ -6,7 +6,8 @@ so what you know and the scripts you have keep working. navi lives inside
 it: a line starting with `?` goes to navi, which knows what you have just
 been running.
 
-neosh is written in Rust (`neosh/`), one binary. Its interpreter is
+neosh is written in Rust, one binary. navi, and the specs its ids name
+(`CLI-40`, `MOD-28`), are in [neoai](https://github.com/Jeanno/neoai). Its interpreter is
 [brush](https://github.com/reubeno/brush)'s (`brush-core`, MIT), a
 bash-compatible shell checked against bash by its own tests; neosh never
 hands a line to another shell. What neosh adds is below.
@@ -21,9 +22,9 @@ hands a line to another shell. What neosh adds is below.
 - NSH-2: The exit status is the last command's, and `exit [n]` leaves with
   n. `--version` and `--help` say what neosh is and how to start it.
 
-- NSH-14: `neosh/install.sh` builds neosh and puts it in `~/.local/bin`
+- NSH-14: `install.sh` builds neosh and puts it in `~/.local/bin`
   (`NEOSH_BIN_DIR`), from the checkout it is in or, piped from curl, a clone
-  in `~/.local/share/neoai` shared with navi's installer. Run again, it
+  in `~/.local/share/neosh`. Run again, it
   updates; `--uninstall` removes it. It replaces or removes only a neosh,
   leaves history and `~/.neoshrc` alone, and never changes the login shell
   or `/etc/shells`: it says how.
