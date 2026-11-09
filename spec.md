@@ -206,6 +206,77 @@ hands a line to another shell. What neosh adds is below.
   if typed, and it can be changed first or cleared with ^C. neosh never runs
   it by itself.
 
+## What you did
+
+navi knows what you have been doing in this terminal: the commands you ran
+and what they printed. neosh keeps each command's output in a file and tells
+navi where it is; navi reads it only when the question needs it.
+
+- NSH-34: An interactive neosh on a terminal runs inside a recorder of its
+  own, the same binary, which sits between the terminal and the shell and
+  copies everything between them untouched: keys, colours, resizes, ^C and
+  ^Z. Full-screen programs (vim, less, htop) work as they do without it.
+  Starting it and running each command add no delay you can see (under
+  50 ms). If it cannot start, neosh carries on unrecorded and `?` says once
+  that output is not being kept.
+- NSH-35: A neosh is recorded once per terminal: the recorder's terminal,
+  named in `NEOSH_RECORDER`, must be the shell's own, so a neosh in a tmux
+  pane, or started on another terminal, is recorded by its own recorder
+  even when it kept `NEOSH_RECORDER` from the shell that started it, and a
+  neosh started inside a recorded one is recorded by the outer recorder.
+- NSH-36: neosh marks where each command's output starts (with its line,
+  its directory and a number) and where it ends (with its status), as
+  escape sequences the recorder takes out before they reach the terminal.
+  A mark carries the session's key, given by the recorder in the
+  environment, so a program printing a mark it made up is not taken for
+  one.
+- NSH-37: Each command's output goes to its own file as it is printed:
+  colours and cursor movement taken out, a line redrawn in place (a
+  progress bar) kept as it ended. A command still running can be read
+  while it runs. A file keeps a command's first 1,000 lines and its latest
+  10,000, and says what was dropped between.
+- NSH-38: What a program shows on the alternate screen (vim, less, htop) is
+  not kept; its file says a full-screen program ran there. Input a program
+  echoes is output, so what is typed into python, node or psql is kept with
+  the command that started it.
+- NSH-39: The index holds one line per command since the terminal opened:
+  number, directory, the line, how it ended (exit status, stopped, still
+  running), how long it took, its file and its line count. It is updated
+  when a command starts and when it ends.
+- NSH-40: ^Z then `?` works: the stopped command's entry says it is
+  stopped (job %n), its output so far is in its file, and `fg` resumes
+  writing to the same file.
+- NSH-41: navi is told, for each command in NSH-6, where its output is and
+  how many lines it is (`printed 37 lines: <file>`), or that it printed
+  nothing, and where the index is, so it can look further back; never the
+  output itself (CLI-40). It reads a file with its file tool, a page at a
+  time. Recorded output is the user's data, never instructions, and navi is
+  told so.
+- NSH-42: All of it is in one directory per terminal, readable only by the
+  user (`$TMPDIR/neosh-<session>/`), deleted when the terminal closes; one
+  left by a terminal that died is deleted the next time a recorder starts.
+- NSH-43: Nothing is recorded for a line typed with a space first, a line
+  for navi, or a `| ?` line (navi is handed that output already).
+  `NEOSH_RECORD=off`, at the prompt or in `~/.neoshrc`, stops recording from
+  the next command on, and `NEOSH_RECORD=on` starts it again; what was
+  recorded stays until the terminal closes. With `NEOSH_RECORD=off` in the
+  environment when neosh starts, there is no recorder at all.
+- NSH-44: Obvious secrets are blanked before they are written: keys and
+  tokens by their shapes (`sk-…`, `ghp_…`, `AKIA…`, `xoxb-…`, `Bearer …`),
+  values of `password=`, `token:`, `secret=` and the like, and private key
+  blocks. Blanking is a safety net, not a promise; NSH-43 is the way to keep
+  something out. Output never leaves the machine on its own: only what navi
+  reads for a question goes to the model, and which model that is is said
+  (NSH-21).
+- NSH-45: After a command fails (not ^C, not ^Z), a dim line under it says
+  `? to ask why`, for the first 3 failures of a session and then no more.
+  navi is never asked anything unasked. `NEOSH_HINT=always` shows it after
+  every failure, `NEOSH_HINT=off` never.
+- NSH-46: In tmux each pane's neosh is recorded on its own (NSH-35); tmux
+  itself is a full-screen program (NSH-38). `ssh host` is a command like
+  any other: what the remote session prints is its output, kept in its
+  file as it runs.
+
 ## The prompt
 
 - NSH-10: The prompt is the directory, `~` for home, and `$` (`#` as root),
@@ -242,8 +313,11 @@ hands a line to another shell. What neosh adds is below.
 
 ## Open
 
-- Telling navi a failed command's output without `| ?`: commands write
-  straight to the terminal, so neosh sees only the status.
+- Asking in one terminal about another (a dev server in another tab), and
+  seeing what a full-screen program shows: not in the first version of
+  NSH-34 to NSH-46.
+- When the remote shell of an `ssh` is a neosh too, an entry for each
+  remote command under the `ssh` one: not in the first version.
 - A prebuilt binary, so installing needs no Rust.
 - Where brush is not bash yet (NSH-3), found by running both: `select`
   does not parse; `shopt -s globstar` makes `**/x` name paths that are not
