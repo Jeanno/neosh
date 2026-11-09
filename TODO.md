@@ -5,6 +5,8 @@ Newest asks first. Done items move to the log at the bottom.
 
 ## Now
 
+- Run the judge eval (neoai TL-46) on Darkbloom once it answers; it was at
+  capacity (429) for the first run. Then decide whether it should judge.
 
 ## Next
 
