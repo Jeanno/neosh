@@ -233,12 +233,15 @@ hands a line to another shell. What neosh adds is below.
   it says so, as NSH-9 does.
 - NSH-62: navi never holds the shell up. While it answers, ^Z sends it to
   the background: it works on and the prompt comes back at once (navi mode
-  is left). What it writes meanwhile is held. When it is done, the next
-  prompt shows its answer, and the command it suggests is typed there
-  (NSH-11). When it waits for a yes or no (neoai CLI-48), the next prompt
-  says so. `?` alone brings it back, what it held first; another question,
-  or `| ?`, waits until it is done and says so. It sees the commands run
-  while it was away with the next question. Closing neosh stops it.
+  is left). What it writes meanwhile is held, and navi is told it is away,
+  so it says by notification when it is done and when it waits for a yes
+  or no (neoai CLI-49, as `navi notify` sets). The next prompt says the
+  same in a line (neoai CLI-48 for the question), not the answer. `?`
+  alone brings navi back, what it held first, so the answer shows then and
+  the command it suggests is typed (NSH-11). Another question, or `| ?`,
+  waits while it works and says so; once it is done, one goes ahead, the
+  answer left unseen. It sees the commands run while it was away with the
+  next question. Closing neosh stops it.
 - NSH-57: In navi mode, the command navi offered (NSH-11), run with Enter
   as it was put there, runs in the shell, and the mode goes on after it.
   Changed in any way, the line is a question again.

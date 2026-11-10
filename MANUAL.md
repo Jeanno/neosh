@@ -100,10 +100,11 @@ navi's manual, `navi setup` and `navi usage`. This manual covers the shell.
 
 - navi never has to hold up the shell. While it answers, press ^Z: it keeps working in the
   background and your prompt comes back at once (navi mode is left).
-- When it is done, the next prompt shows its answer, and the command it suggests is typed
-  there as usual. If it needs a yes or no meanwhile, the next prompt says so.
-- `?` alone brings it back to the screen, with what it wrote while away; answer it there.
-- Another question, or `| ?`, waits until it is done. navi hears about the commands you ran
+- When it is done, or needs a yes or no, navi sends a notification (Mac, and phone if set
+  up; `navi notify` turns them down or off), and your next prompt says so in one line.
+- `?` alone brings it back to the screen with what it wrote while away: its answer, or the
+  question to answer there. A command it suggests is then typed at your prompt as usual.
+- Another question, or `| ?`, waits while it works; once it is done, a new one goes ahead. navi hears about the commands you ran
   meanwhile with your next question. Closing neosh stops it.
 
 ### Piping output to navi

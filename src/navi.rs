@@ -249,6 +249,8 @@ pub fn command(navi: &Path, path: Option<&str>, prompt: &str, dir: &Path, sessio
         .env("NAVI_GUTTER", "1")
         // neoai CLI-48: so neosh can say when navi, away, waits for an answer.
         .env("NAVI_MARK_QUESTIONS", "1")
+        // neoai CLI-49: there while ^Z has it away, so it notifies instead.
+        .env("NAVI_AWAY_FILE", away_file(session))
         .env("NEOROUTER_SEEN", seen_file(session));
     match manual_file() {
         Some(manual) => command.env(SHELL_MANUAL, manual),
@@ -358,6 +360,11 @@ pub fn manual_file() -> Option<PathBuf> {
 }
 
 /// NSH-21: where this session's last backend announcement is kept (MOD-28).
+/// NSH-62: there while navi is in the background (neoai CLI-49).
+pub fn away_file(session: &str) -> PathBuf {
+    std::env::temp_dir().join(format!("{session}.away"))
+}
+
 pub fn seen_file(session: &str) -> PathBuf {
     std::env::temp_dir().join(format!("{session}-seen"))
 }

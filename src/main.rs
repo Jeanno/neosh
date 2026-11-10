@@ -404,22 +404,13 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                 }
                 self.recent.push(navi::Ran { line, dir, status, took, output });
             }
-            // NSH-62: navi, away, done or waiting on you.
+            // NSH-62: navi, away, done or waiting on you: said in a line; navi notifies too.
             if let Some(n) = self.away.as_mut() {
-                if let Some((status, held)) = n.done() {
-                    eprintln!("{}", dim_if(guard.as_deref(), &format!("· navi is done with ?{}", n.ask)));
-                    let mut out = std::io::stdout().lock();
-                    let _ = out.write_all(&held);
-                    if !held.ends_with(b"\n") {
-                        let _ = out.write_all(b"\r\n");
+                if n.finished().is_some() {
+                    if !n.told_done {
+                        n.told_done = true;
+                        eprintln!("{}", dim_if(guard.as_deref(), &format!("· navi is done with ?{}: ? shows its answer", n.ask)));
                     }
-                    let _ = out.flush();
-                    drop(out);
-                    self.suggested = navi::take_suggestion(&n.handed);
-                    if let Some(s) = guard.as_mut() {
-                        s.set_last_exit_status(status);
-                    }
-                    self.away = None;
                 } else if n.asking() && !n.told {
                     n.told = true;
                     eprintln!("{}", dim_if(guard.as_deref(), &format!("· navi waits for your answer about ?{}: ? to answer", n.ask)));
@@ -554,6 +545,8 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                 true => navi::Line::Navi(line.trim()[1..].trim().to_string()),
                 false => navi::classify_in(&line, ask, |word| guard.as_mut().is_none_or(|s| is_command(s, word)), |word| navi::globs_a_file(word, &dir)),
             };
+            // NSH-62: navi away and still working, not done with an answer unseen.
+            let busy = self.away.as_mut().is_some_and(|n| n.finished().is_none());
             match what {
                 navi::Line::Shell => {
                     if !line.trim().is_empty() {
@@ -593,11 +586,13 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                     }
                     return Ok(ReadResult::Input(line));
                 }
-                navi::Line::Piped { .. } if self.away.is_some() => {
+                navi::Line::Piped { .. } if busy => {
                     still_away(self.away.as_ref(), guard.as_deref());
                     continue;
                 }
                 navi::Line::Piped { command, question } => {
+                    // An answer left unseen is in the conversation still.
+                    self.away = None;
                     let Some(found) = guard.as_ref().and_then(|s| s.find_first_executable_in_path("navi")) else {
                         if let Some(s) = guard.as_mut() {
                             let _ = s.add_to_history(line.trim_end_matches('\n'));
@@ -621,7 +616,7 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                     return Ok(ReadResult::Input(ran));
                 }
                 // NSH-62: `?` alone brings navi back; another question waits for it.
-                navi::Line::Navi(ask) if self.away.is_some() => {
+                navi::Line::Navi(ask) if self.away.is_some() && (busy || ask.is_empty()) => {
                     if !ask.is_empty() {
                         still_away(self.away.as_ref(), guard.as_deref());
                         continue;
@@ -633,6 +628,7 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                     continue;
                 }
                 navi::Line::Navi(ask) => {
+                    self.away = None;
                     // NSH-60: `?/usage` shows what navi has used and cost, as `navi usage` does.
                     if ask == "/usage" || ask.starts_with("/usage ") {
                         let found = guard.as_ref().and_then(|s| s.find_first_executable_in_path("navi"));
@@ -732,7 +728,7 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                     // What navi was told about; what runs while it is away, it hears of next time.
                     self.recent.clear();
                     // NSH-62: on a terminal of its own, so ^Z can send it away.
-                    match away::start(command, &ask, navi::command_file(&self.session)) {
+                    match away::start(command, &ask, navi::command_file(&self.session), navi::away_file(&self.session)) {
                         Ok(mut n) => {
                             let how = n.attach();
                             self.answered(shell, n, how);

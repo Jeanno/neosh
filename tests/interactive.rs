@@ -12,7 +12,7 @@ const STAND_IN: &str = r#"#!/bin/sh
 { echo "ARGS: $*"; echo "PWD: $PWD"; printf 'RECENT: %s\n' "$NAVI_RECENT"; echo "INDEX: $NAVI_SHELL_INDEX"; [ -t 0 ] || echo "STDIN: $(cat)"; echo ---; } >> "$HOME/navi.log"
 [ -n "$NAVI_SHELL_INDEX" ] && rm -rf "$HOME/rec" && cp -R "$(dirname "$NAVI_SHELL_INDEX")" "$HOME/rec"
 case "$*" in *suggest*) echo 'echo suggested-ran' > "$NAVI_COMMAND_FILE" ;; esac
-case "$*" in *slow*) sleep 3 ;; esac
+case "$*" in *slow*) sleep 6; [ -e "$NAVI_AWAY_FILE" ] && echo "AWAY AT THE END" >> "$HOME/navi.log" ;; esac
 case "$*" in *confirm*) sleep 2; printf '\033]6974;Q\007run? [y/N] '; read a; printf '\033]6974;A\007'; echo "got $a" ;; esac
 case "$*" in *judged*) printf '\033]6974;Q\007run? [y/N] \033]6974;A\007allowed\n'; sleep 3 ;; esac
 echo "navi says hi"
@@ -524,28 +524,43 @@ fn a_failure_hints_at_asking_for_the_first_three() {
     assert!(!screen.contains("? to ask why"), "{screen}");
 }
 
-// NSH-62: ^Z sends navi away; the shell runs commands while it works on,
-// and the next prompt after it is done shows its answer.
+// NSH-62: ^Z sends navi away; the shell runs commands while it works on.
+// Done, the next prompt says so in a line, navi having been told it is away
+// (neoai CLI-49), and `?` shows the answer.
 #[test]
 fn navi_sent_away_works_on_while_the_shell_runs_commands() {
     let home = Home::new("away");
-    let screen = home.run(&["? slow task", "@type \x1a", "echo meanwhile-ran", "@wait 3", "", "exit"], &[]);
+    let screen = home.run(&["? slow task", "@type \x1a", "echo meanwhile-ran", "@wait 6", "", "?", "exit"], &[]);
     assert!(screen.contains("navi works on in the background"), "{screen}");
     let ran = screen.find("meanwhile-ran\n").expect(&screen);
-    let done = screen.find("navi is done with ?slow task").expect(&screen);
+    let done = screen.find("navi is done with ?slow task: ? shows its answer").expect(&screen);
     assert!(ran < done, "{screen}");
-    assert!(screen[done..].contains("navi says hi"), "{screen}");
+    let hi = screen.find("navi says hi").expect(&screen);
+    assert!(done < hi, "{screen}");
+    assert!(home.log().contains("AWAY AT THE END"), "{}", home.log());
+}
+
+// NSH-62: an answer left unseen does not hold up the next question.
+#[test]
+fn a_new_question_goes_ahead_of_an_answer_left_unseen() {
+    let home = Home::new("unseen");
+    let screen = home.run(&["? slow task", "@type \x1a", "@wait 6", "", "? and next", "exit"], &[]);
+    assert!(screen.contains("navi is done with ?slow task"), "{screen}");
+    assert!(!screen.contains("navi is still on"), "{screen}");
+    assert!(home.log().contains("-p and next"), "{}", home.log());
 }
 
 // NSH-62: `?` alone brings it back; another question waits for it.
 #[test]
 fn a_question_mark_alone_brings_navi_back() {
     let home = Home::new("back");
-    let screen = home.run(&["? slow task", "@type \x1a", "? another", "?", "@wait 3", "exit"], &[]);
+    let screen = home.run(&["? slow task", "@type \x1a", "? another", "?", "@wait 6", "exit"], &[]);
     assert!(screen.contains("navi is still on ?slow task"), "{screen}");
     assert!(screen.contains("navi says hi"), "{screen}");
     assert!(!screen.contains("navi is done with"), "{screen}");
     assert!(!home.log().contains("-p another"), "{}", home.log());
+    // Back on the screen, it is no longer away.
+    assert!(!home.log().contains("AWAY AT THE END"), "{}", home.log());
 }
 
 // NSH-62, neoai CLI-48: away, a question navi opens is said at the next prompt.
@@ -564,5 +579,5 @@ fn a_question_closed_while_away_is_not_said() {
     let screen = home.run(&["? judged call", "@type \x1a", "", "@wait 3", "", "exit"], &[]);
     assert!(screen.contains("navi works on in the background"), "{screen}");
     assert!(!screen.contains("waits for your answer"), "{screen}");
-    assert!(screen.contains("navi is done with ?judged call"), "{screen}");
+    assert!(screen.contains("navi is done with ?judged call: ? shows its answer"), "{screen}");
 }

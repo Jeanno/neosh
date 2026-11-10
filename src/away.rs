@@ -38,8 +38,11 @@ pub struct Navi {
     /// The question asked, and the file for the command it suggests (NSH-11).
     pub ask: String,
     pub handed: PathBuf,
-    /// Whether the prompt has said it waits for an answer, this time.
+    /// Whether the prompt has said it waits for an answer, this time, and that it is done.
     pub told: bool,
+    pub told_done: bool,
+    /// There while navi is away, so navi notifies (neoai CLI-49).
+    away: PathBuf,
 }
 
 pub enum Ended {
@@ -91,7 +94,7 @@ fn size() -> Option<libc::winsize> {
 
 /// Starts navi's `command` on a terminal of its own, the size of neosh's,
 /// with navi's answer shown as it comes until `attach` says otherwise.
-pub fn start(mut command: Command, ask: &str, handed: PathBuf) -> Result<Navi, Failed> {
+pub fn start(mut command: Command, ask: &str, handed: PathBuf, away: PathBuf) -> Result<Navi, Failed> {
     let mut modes: libc::termios = unsafe { std::mem::zeroed() };
     // SAFETY: tcgetattr fills the termios given.
     let has_modes = unsafe { libc::tcgetattr(0, &mut modes) } == 0;
@@ -159,7 +162,8 @@ pub fn start(mut command: Command, ask: &str, handed: PathBuf) -> Result<Navi, F
         if s.shown { show(&rest) } else { s.held.extend(rest) }
         let _ = done.send(());
     });
-    Ok(Navi { child, master, screen, drained, status: None, ask: ask.to_string(), handed, told: false })
+    let _ = std::fs::remove_file(&away);
+    Ok(Navi { child, master, screen, drained, status: None, ask: ask.to_string(), handed, told: false, told_done: false, away })
 }
 
 impl Navi {
@@ -178,14 +182,6 @@ impl Navi {
         self.screen.lock().map(|s| s.asking).unwrap_or(false)
     }
 
-    /// Done, while away: how it ended and all it wrote, once read to its end.
-    pub fn done(&mut self) -> Option<(u8, Vec<u8>)> {
-        let status = self.finished()?;
-        let _ = self.drained.recv_timeout(Duration::from_millis(500));
-        let held = self.screen.lock().map(|mut s| std::mem::take(&mut s.held)).unwrap_or_default();
-        Some((status, held))
-    }
-
     /// navi has the screen: what it held is shown, keys go to it, until it
     /// is done or ^Z sends it away again.
     pub fn attach(&mut self) -> Ended {
@@ -195,6 +191,7 @@ impl Navi {
             s.shown = true;
         }
         self.told = false;
+        let _ = std::fs::remove_file(&self.away);
         let mut modes: libc::termios = unsafe { std::mem::zeroed() };
         // SAFETY: tcgetattr and tcsetattr on our own terminal, with a termios they filled.
         let saved = (unsafe { libc::tcgetattr(0, &mut modes) } == 0).then_some(modes);
@@ -239,6 +236,7 @@ impl Navi {
                 unsafe { libc::write(self.master.as_raw_fd(), to_navi.as_ptr().cast(), to_navi.len()) };
             }
             if away {
+                let _ = std::fs::File::create(&self.away);
                 break Ended::Away;
             }
         };
@@ -258,6 +256,7 @@ impl Navi {
 // Closing neosh stops navi, and what it runs.
 impl Drop for Navi {
     fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.away);
         if self.finished().is_none() {
             unsafe { libc::kill(-(self.child.id() as i32), libc::SIGHUP) };
             let _ = self.child.kill();
