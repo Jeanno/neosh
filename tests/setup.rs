@@ -53,10 +53,10 @@ fn zsh_s_look_is_written_between_markers_and_written_again_in_place() {
     );
     // Again with nothing new: nothing changes.
     let out = home.neosh(&["--setup", "--look", "zsh", "--yes"]);
-    assert!(String::from_utf8_lossy(&out.stdout).contains("nothing to change"), "{out:?}");
-    // neosh's own look takes setup's lines out, and leaves the rest.
+    assert!(String::from_utf8_lossy(&out.stdout).contains("already has this look"), "{out:?}");
+    // neosh's own look takes setup's lines out, keeps only the choice, and leaves the rest.
     assert!(home.neosh(&["--setup", "--look", "neosh", "--yes"]).status.success());
-    assert_eq!(home.rc(), "alias ll='ls -l'\n");
+    assert_eq!(home.rc(), "alias ll='ls -l'\n\n# >>> neosh setup >>>\n# neosh's own look; `neosh --setup` changes it.\n# <<< neosh setup <<<\n");
 }
 
 // NSH-49

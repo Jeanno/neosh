@@ -49,19 +49,24 @@ pub fn parse(args: &[String]) -> Result<Options, String> {
 
 /// NSH-47: offered when an interactive neosh starts with no `~/.neoshrc`.
 pub fn offer(rc: &Path) {
-    println!("Welcome to neosh. There is no {} yet.", tilde(rc));
+    println!("{}", bold("Welcome to neosh."));
+    println!("Start a line with ? to ask navi anything. Setup takes a minute: the model that\nanswers ?, then how the prompt looks.");
     match ask("Set neosh up now? [Y]es, [l]ater, [n]ever: ").as_str() {
         "" | "y" | "yes" => {
             let _ = run(&Options { at_start: true, ..Options::default() }, rc);
         }
         "n" | "never" => {
             if std::fs::write(rc, NEVER).is_ok() {
-                println!("Not asking again. Run `neosh --setup` any time.\n");
+                println!("{}\n", dim("Not asking again. Run `neosh --setup` any time."));
             }
         }
-        _ => println!("Later, then: it is offered next time, or run `neosh --setup`.\n"),
+        _ => println!("{}\n", dim("Later, then: it is offered next time, or run `neosh --setup`.")),
     }
 }
+
+/// What setup writes for neosh's own look: no prompt, only the choice, so a
+/// first start is not offered setup again (NSH-50).
+const OWN_LOOK: &str = "# neosh's own look; `neosh --setup` changes it.";
 
 /// NSH-47 to NSH-50: setup itself; the exit status.
 pub fn run(options: &Options, rc: &Path) -> i32 {
@@ -72,59 +77,93 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
     }
     // NSH-48: the model navi answers with, by navi's own setup.
     if options.look.is_none() {
-        println!("\n1/2  The model navi answers ? with");
+        println!("\n{}", bold("Step 1 of 2 · The model that answers ?"));
         match find("navi") {
+            // navi's setup says itself when it leaves no model answering (SET-29).
             Some(navi) => {
-                if yes_no("Set it up now? [Y/n] ", true) {
-                    let _ = Command::new(navi).arg("setup").status();
-                }
+                let _ = Command::new(navi).arg("setup").status();
             }
             None => println!("navi answers ? and is not installed. Install it, then run neosh --setup again:\n  {INSTALL_NAVI}"),
         }
-        println!("\n2/2  neosh's look\n  1) neosh's own: the directory, git branch and a failed status (default)\n  2) like my zsh: its prompt and colours");
+        println!("\n{}", bold("Step 2 of 2 · How the prompt looks"));
+        println!("  1  neosh's own  {}", dim("the directory, git branch and a failed status"));
+        println!("  2  like my zsh  {}", dim("its prompt and colours"));
     }
     let look = options.look.unwrap_or_else(|| if ask("Choose [1]: ") == "2" { Look::Zsh } else { Look::Neosh });
     // NSH-49
     let lines = match look {
-        Look::Neosh => Vec::new(),
+        Look::Neosh => vec![OWN_LOOK.to_string()],
         Look::Zsh => {
             let (lines, notes) = zsh_look();
             for note in notes {
-                println!("· {note}");
+                println!("{}", dim(&format!("· {note}")));
             }
             lines
         }
     };
-    // NSH-50: shown, then written only on yes.
+    // NSH-50: shown, then written only on yes; neosh's own look, which sets
+    // nothing, is written without asking unless it takes an earlier look out.
     let before = std::fs::read_to_string(rc).unwrap_or_default();
     let after = with_block(&before, &lines);
+    let earlier = block(&before).is_some_and(|b| b.iter().any(|l| l.trim() != OWN_LOOK && !l.trim().is_empty()));
     if after == before {
-        println!("{} already has this; nothing to change.", tilde(rc));
-        return 0;
-    }
-    if lines.is_empty() {
-        println!("neosh's own look: the lines an earlier setup wrote in {} go.", tilde(rc));
+        println!("{}", dim(&format!("· {} already has this look.", tilde(rc))));
     } else {
-        println!("This goes in {}:\n", tilde(rc));
-        for line in &lines {
-            println!("  {line}");
+        let asking = !options.yes && (look == Look::Zsh || earlier);
+        if look == Look::Neosh && earlier {
+            println!("neosh's own look: the lines an earlier setup wrote in {} go.", tilde(rc));
+        } else if look == Look::Zsh {
+            println!("This goes in {}:\n", tilde(rc));
+            for line in &lines {
+                println!("  {line}");
+            }
+            println!();
+        }
+        if asking && !yes_no("Write it? [Y/n] ", true) {
+            println!("Nothing written.");
+            return 0;
+        }
+        if let Err(e) = std::fs::write(rc, after) {
+            eprintln!("neosh: could not write {}: {e}", rc.display());
+            return 1;
+        }
+        println!("{}", dim(&format!("· Saved in {}.", tilde(rc))));
+    }
+    if terminal {
+        println!("\n{}", bold("neosh is ready."));
+        println!("  ?what's in this folder  {}", dim("ask navi anything"));
+        println!("  ?                       {}", dim("navi mode: every line goes to navi, until Esc"));
+        println!("  neosh --setup           {}", dim("change any of this"));
+        if !options.at_start {
+            println!("{}", dim(&format!("The look counts in a new neosh, or after: source {}", tilde(rc))));
         }
         println!();
     }
-    if !options.yes && !yes_no("Write it? [Y/n] ", true) {
-        println!("Nothing written.");
-        return 0;
-    }
-    if let Err(e) = std::fs::write(rc, after) {
-        eprintln!("neosh: could not write {}: {e}", rc.display());
-        return 1;
-    }
-    if options.at_start {
-        println!("Written.\n");
-    } else {
-        println!("Written. It counts in a new neosh, or after: source {}\n", tilde(rc));
-    }
     0
+}
+
+/// The lines between setup's markers, when there are markers.
+fn block(rc: &str) -> Option<Vec<&str>> {
+    let mut lines = rc.lines().skip_while(|l| l.trim() != BEGIN);
+    lines.next()?;
+    Some(lines.take_while(|l| l.trim() != END).collect())
+}
+
+/// Bold and dim on a terminal that wants colour; plain otherwise.
+fn styled(code: &str, s: &str) -> String {
+    if std::io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none() {
+        format!("\x1b[{code}m{s}\x1b[0m")
+    } else {
+        s.to_string()
+    }
+}
+
+fn bold(s: &str) -> String {
+    styled("1", s)
+}
+
+fn dim(s: &str) -> String {
+    styled("2", s)
 }
 
 /// `rc` with setup's block made `lines`, or taken out when there are none;

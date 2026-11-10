@@ -433,7 +433,7 @@ fn setup_at_first_start_runs_navi_s_and_copies_zsh_s_look_at_once() {
     std::fs::remove_file(home.0.join(".neoshrc")).unwrap();
     std::fs::write(home.0.join(".zshrc"), "PROMPT='%n-zsh-look %# '\nRPROMPT='%T'\nexport LSCOLORS=Gxfxcxdxbxegedabagacad\n").unwrap();
     let zdotdir = home.0.display().to_string();
-    let screen = home.run(&["y", "y", "2", "y", "echo $LSCOLORS", "exit"], &[("ZDOTDIR", &zdotdir)]);
+    let screen = home.run(&["y", "2", "y", "echo $LSCOLORS", "exit"], &[("ZDOTDIR", &zdotdir)]);
     assert!(home.log().contains("ARGS: setup"), "{}", home.log());
     assert!(screen.contains("RPROMPT"), "{screen}");
     let rc = std::fs::read_to_string(home.0.join(".neoshrc")).unwrap();
@@ -442,6 +442,23 @@ fn setup_at_first_start_runs_navi_s_and_copies_zsh_s_look_at_once() {
     // It counts at once: the prompt is zsh's, and the colours are there.
     assert!(screen.contains("-zsh-look $ echo"), "{screen}");
     assert!(screen.contains("\nGxfxcxdxbxegedabagacad"), "{screen}");
+}
+
+// NSH-47, NSH-50: Enter all the way is a setup done, not one to offer again.
+#[test]
+fn setup_with_every_default_is_done_and_says_how_to_begin() {
+    let home = Home::new("defaults");
+    std::fs::remove_file(home.0.join(".neoshrc")).unwrap();
+    let screen = home.run(&["", "", "echo still-here", "exit"], &[]);
+    assert_eq!(screen.matches("ARGS: setup").count() + home.log().matches("ARGS: setup").count(), 1, "{}", home.log());
+    assert!(!screen.contains("Set it up now"), "{screen}");
+    assert!(screen.contains("Step 2 of 2"), "{screen}");
+    assert!(!screen.contains("Write it?"), "{screen}");
+    assert!(screen.contains("neosh is ready."), "{screen}");
+    assert!(screen.contains("still-here"), "{screen}");
+    let rc = std::fs::read_to_string(home.0.join(".neoshrc")).unwrap();
+    assert!(rc.contains("neosh's own look"), "{rc}");
+    assert!(!home.run(&["exit"], &[]).contains("Set neosh up now?"));
 }
 
 // NSH-34, NSH-36, NSH-37, NSH-39, NSH-41, NSH-42, NSH-43

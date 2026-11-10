@@ -42,7 +42,7 @@ hands a line to another shell. What neosh adds is below.
   what it set. `neosh setup` is bash's, the script named `setup`. Without a
   terminal `--setup` says so and exits 1, unless every choice is given
   (NSH-51).
-- NSH-48: The model step runs `navi setup` (SET-1 to SET-27) and goes on
+- NSH-48: The model step runs `navi setup` (SET-1 to SET-29) and goes on
   when it is done. With no `navi` on `$PATH` it says navi is what answers
   `?` and how to install it, and goes on.
 - NSH-49: The look step offers neosh's own look (the default) or your
@@ -64,9 +64,20 @@ hands a line to another shell. What neosh adds is below.
 - NSH-50: What setup would write is shown first and written only on yes,
   into `~/.neoshrc` between `# >>> neosh setup >>>` and
   `# <<< neosh setup <<<`, replacing what an earlier setup wrote there and
-  nothing else; neosh's own look writes no prompt lines. It counts from
-  the next neosh, or after `source ~/.neoshrc`; offered at start, it counts
-  at once.
+  nothing else. neosh's own look writes no prompt lines, only a comment
+  naming the choice, so a first start that kept every default is not
+  offered setup again; that is written without asking, unless it takes an
+  earlier setup's look out. It counts from the next neosh, or after
+  `source ~/.neoshrc`; offered at start, it counts at once.
+- NSH-58: Setup says what it is for before asking (a line starting with
+  `?` asks navi; setup is the model that answers it, then the prompt's
+  look) and asks once: yes runs navi's setup straight away, with no second
+  question; leaving navi's setup with no model, navi says so (SET-29).
+  Each step is
+  headed `Step N of 2` in bold, with hints dim (plain without a terminal or
+  with `NO_COLOR`). At the end it says neosh is ready and shows how to
+  begin: `?what's in this folder`, `?` for navi mode, `neosh --setup` to
+  change it.
 - NSH-51: `neosh --setup --look zsh` or `--look neosh` makes the look choice
   and skips the model step; with `--yes` it also writes without asking, so
   it runs without a terminal.
