@@ -8,6 +8,7 @@ mod away;
 mod bang;
 mod cd;
 mod errors;
+mod fg;
 mod histctl;
 mod histsize;
 mod navi;
@@ -152,6 +153,8 @@ async fn run(args: Args) -> Result<u8, ShellError> {
     let mut shell = builder.build().await?;
     // NSH-25: CDPATH, which brush's `cd` does not look in.
     cd::install(&mut shell);
+    // NSH-63: a job `fg` brings back and that ends there is not reported Done.
+    fg::install(&mut shell);
     let shell: ShellRef<errors::Extensions> = std::sync::Arc::new(tokio::sync::Mutex::new(shell));
 
     // NSH-1: ~/.profile for a login shell, ~/.neoshrc for an interactive one.

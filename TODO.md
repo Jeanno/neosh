@@ -10,7 +10,7 @@ Newest asks first. Done items move to the log at the bottom.
 
 ## Next
 
-- `[1]+ Done` printed after ^C on a job brought back with `fg` (brush).
+- A job started with `&` has no pid in brush (`[1]+ <pid unknown>`), so `fg` cannot hand it the terminal and ^C does not stop it; `bg` says nothing (brush, NSH-3).
 - Where the "? to ask why" hint sits.
 - navi's example commands with placeholders (`your-command-here`) get typed at the prompt; only a runnable command should be.
 - navi offered the output of a command (`Mon Nov  9 …`) as the command to type; with the placeholder item above, only a runnable command should be (neoai).
@@ -19,14 +19,18 @@ Newest asks first. Done items move to the log at the bottom.
 
 ## Waiting on the owner
 
-- A prebuilt neosh release.
+- Cutting the first release: push the tag `v0.1.0` (README, Cutting a release; NSH-65), then check `curl … install.sh | sh` installs it.
 - Filing upstream with brush: background jobs survive the terminal closing,
-  and a hook in the reedline validator (vendored here, NSH-53).
+  a hook in the reedline validator (vendored here, NSH-53), and `fg` leaving
+  a job that ended in the foreground in the job list, so it is reported
+  `Done` (worked around in neosh's `fg`, NSH-63).
 - A possible rename of the pm skill.
 - Low priority (deprioritized 2026-11-09): a Raycast release tag (neoai `raycast-v*`).
 
 ## Done
 
+- 2026-11-10: a prebuilt release: `release.yml` builds macOS and Linux tarballs on a `v*` tag; piped from curl, `install.sh` installs the latest one after checking its sha256, and builds from source with none or `--source` (NSH-64, NSH-65).
+- 2026-11-10: no `[1]+ Done` after ^C on a job brought back with `fg`, as in bash (NSH-63).
 - 2026-11-10: navi away notifies when it is done or waits for you, instead of its answer showing at the next prompt (NSH-62, neoai CLI-49).
 - 2026-11-09: ^Z sends navi to the background while it works; `?` brings it back, the next prompt shows its answer or that it waits for you (NSH-62, neoai CLI-48).
 - 2026-11-09: `install.sh` installs navi too when it is missing, without asking (NSH-61); `?/usage` runs `navi usage` (NSH-60).

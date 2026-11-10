@@ -9,13 +9,19 @@ navi's manual, `navi setup` and `navi usage`. This manual covers the shell.
 
 ## Install, update, uninstall
 
-- You need Rust (rustup.rs) to build neosh, and `navi` on your `$PATH` to ask anything.
-  Piped from curl, the installer also needs git.
-- Install with the one-line `curl … install.sh | sh` from neosh's README, or from a checkout
-  with `./install.sh`, which builds the code you have.
-- It puts `neosh` in `~/.local/bin` (set `NEOSH_BIN_DIR` for elsewhere). Piped from curl, it
-  clones the source to `~/.local/share/neosh` (set `NEOSH_SRC` for elsewhere).
-- The first build takes a minute or two.
+- Install with the one-line
+  `curl -fsSL https://raw.githubusercontent.com/Jeanno/neosh/main/install.sh | sh` from
+  neosh's README. It downloads the prebuilt neosh for your machine (macOS arm64 or x86_64,
+  Linux x86_64 or arm64) from the latest GitHub release and checks its sha256; this needs no
+  Rust. A download that does not match its sha256 installs nothing.
+- With no release for your machine, or with `--source` (`… | sh -s -- --source`), it builds
+  neosh from source instead, which needs Rust (rustup.rs) and git. From a checkout,
+  `./install.sh` always builds the code you have.
+- You need `navi` on your `$PATH` to ask anything (the installer adds it, see below).
+- It puts `neosh` in `~/.local/bin` (set `NEOSH_BIN_DIR` for elsewhere). Built from source
+  when piped from curl, it clones the source to `~/.local/share/neosh` (set `NEOSH_SRC` for
+  elsewhere).
+- A build from source takes a minute or two the first time.
 - Update: run the installer again.
 - Uninstall: `./install.sh --uninstall`, or add `-s -- --uninstall` to the curl line
   (`… | sh -s -- --uninstall`). It removes only the `neosh` program and keeps your history
@@ -244,6 +250,8 @@ Known differences from bash (brush's to fix):
 - `coproc` can stop neosh with a bad file descriptor.
 - `dirs` shows `/private/tmp` for `/tmp`.
 - Background jobs keep running when the terminal closes, where bash sends them a hangup.
+- A job started with `&` is shown as `[1]+ <pid unknown>`, and once brought back with `fg`,
+  ^C does not stop it. `bg` does not print the job it resumed.
 
 ## Making neosh your login shell
 

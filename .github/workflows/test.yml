@@ -29,3 +29,20 @@ jobs:
           "$RUNNER_TEMP/bin/neosh" -c 'test "$((6 * 7))" = 42'
           NEOSH_BIN_DIR="$RUNNER_TEMP/bin" ./install.sh --uninstall
           test ! -e "$RUNNER_TEMP/bin/neosh"
+
+      # Piped from curl, it installs a release's neosh after checking its
+      # sha256 (NSH-64): here a release made on the spot, as release.yml makes one.
+      - name: Install a release
+        run: |
+          rel="$RUNNER_TEMP/release" && mkdir -p "$rel/pkg"
+          cp target/release/neosh README.md LICENSE "$rel/pkg/"
+          asset=neosh-aarch64-apple-darwin.tar.gz
+          tar -czf "$rel/$asset" -C "$rel/pkg" neosh README.md LICENSE
+          (cd "$rel" && shasum -a 256 "$asset" > "$asset.sha256")
+          cd "$RUNNER_TEMP"
+          NEOSH_INSTALL_NAVI=no NEOSH_BIN_DIR="$RUNNER_TEMP/bin" NEOSH_RELEASE_URL="file://$rel" sh < "$GITHUB_WORKSPACE/install.sh" | tee out
+          grep -q 'Downloading neosh for aarch64-apple-darwin' out
+          "$RUNNER_TEMP/bin/neosh" -c 'test "$((6 * 7))" = 42'
+          echo 0000 > "$rel/$asset.sha256"
+          ! NEOSH_INSTALL_NAVI=no NEOSH_BIN_DIR="$RUNNER_TEMP/bin2" NEOSH_RELEASE_URL="file://$rel" sh < "$GITHUB_WORKSPACE/install.sh"
+          test ! -e "$RUNNER_TEMP/bin2/neosh"

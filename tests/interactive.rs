@@ -169,6 +169,20 @@ fn job_control_and_a_command_of_several_lines_work_through_neosh() {
     assert!(log.contains("~/work $ for f in a b; do ↵ echo got-$f ↵ done (ok, printed 2 lines: "), "{log}");
 }
 
+// NSH-63
+#[test]
+fn a_job_brought_back_and_stopped_by_ctrl_c_is_not_reported_done() {
+    let home = Home::new("fg-done");
+    let screen = home.run(
+        &["sleep 20", "@wait 1", "\x1a", "bg", "fg", "@wait 1", "\x03", "echo after-fg", "sleep 1 &", "@wait 2", "echo after-bg", "exit"],
+        &[],
+    );
+    assert!(screen.contains("Stopped\tsleep 20") && screen.contains("after-fg"), "{screen}");
+    assert!(!screen.contains("Done\tsleep 20"), "{screen}");
+    // A job that ends in the background is still reported, as in bash.
+    assert!(screen.contains("Done\tsleep 1"), "{screen}");
+}
+
 // NSH-53
 #[test]
 fn a_quote_in_a_question_does_not_hold_it_open() {

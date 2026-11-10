@@ -24,9 +24,10 @@ hands a line to another shell. What neosh adds is below.
   script that is not there says so as bash does (`neosh: x.sh: No such file
   or directory`, status 127).
 
-- NSH-14: `install.sh` builds neosh and puts it in `~/.local/bin`
-  (`NEOSH_BIN_DIR`), from the checkout it is in or, piped from curl, a clone
-  in `~/.local/share/neosh`. Run again, it
+- NSH-14: `install.sh` puts neosh in `~/.local/bin` (`NEOSH_BIN_DIR`):
+  built from the checkout it is in or, piped from curl, the prebuilt one
+  of the latest release (NSH-64), else built from a clone in
+  `~/.local/share/neosh`. Run again, it
   updates; `--uninstall` removes it. It replaces or removes only a neosh,
   leaves history and `~/.neoshrc` alone, and never changes the login shell
   or `/etc/shells`: it says how.
@@ -36,6 +37,19 @@ hands a line to another shell. What neosh adds is below.
   what it needs (Node 22 or newer) when it is missing; neosh stays installed
   either way, and the installer says how to try again.
   `NEOSH_INSTALL_NAVI=no` leaves navi out and says how to install it.
+- NSH-64: Piped from curl, `install.sh` needs no Rust when there is a
+  release for the machine: it downloads `neosh-<target>.tar.gz` for macOS
+  (arm64, x86_64) or Linux (x86_64, arm64) from the latest GitHub release
+  (`NEOSH_RELEASE_URL` for another place), checks it against the
+  `.sha256` beside it, and installs the neosh in it. A download that does
+  not match, or holds no neosh, installs nothing and says so. With no
+  release, no asset for the machine, or `--source`, it builds from source
+  as before; from a checkout it always builds the code there.
+- NSH-65: Pushing a tag `v<version>`, the version in `Cargo.toml`, makes a
+  GitHub Release (`.github/workflows/release.yml`) of neosh built for each
+  machine of NSH-64, each a tarball of the program, README and LICENSE with
+  its sha256. A tag that is not the version builds nothing; a machine whose
+  build fails is left out, but not the Mac on arm.
 
 ## Setup
 
@@ -95,6 +109,10 @@ hands a line to another shell. What neosh adds is below.
   functions, expansions, globs, aliases, arrays and `[[ … ]]`, job control
   (^Z, `jobs`, `fg`, `bg`), and bash's builtins. Where brush and bash differ,
   bash is right, and the difference is brush's to fix.
+- NSH-63: A job brought back with `fg` is the terminal's again: when it
+  ends there (^C, or done), it is not reported as `[1]+ Done` at the next
+  prompt, as bash does not; stopped again with ^Z, it is reported Stopped.
+  A job that ends in the background is still reported Done.
 - NSH-52: An error is said as bash says it: a script names itself and the
   line (`s.sh: line 2: x: command not found`, a sourced file names that
   file), `-c` and commands on stdin give the line (`neosh: line 1: …`),
@@ -382,9 +400,10 @@ navi where it is; navi reads it only when the question needs it.
   NSH-34 to NSH-46.
 - When the remote shell of an `ssh` is a neosh too, an entry for each
   remote command under the `ssh` one: not in the first version.
-- A prebuilt binary, so installing needs no Rust.
 - Where brush is not bash yet (NSH-3), found by running both: `select`
   does not parse; `shopt -s globstar` makes `**/x` name paths that are not
   there; `coproc` can stop neosh with a bad file descriptor; `dirs` shows
   `/private/tmp` for `/tmp`; jobs in the background keep running when the
-  terminal closes, where bash sends them a hangup. These are brush's to fix.
+  terminal closes, where bash sends them a hangup; a job started with `&`
+  is said as `[1]+ <pid unknown>` and, brought back with `fg`, ^C does not
+  stop it; `bg` does not say the job it resumed. These are brush's to fix.

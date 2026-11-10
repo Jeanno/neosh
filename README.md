@@ -26,19 +26,22 @@ would not.
 
 ## Install
 
-You need [Rust](https://rustup.rs) to build it, and Node 22 or newer for
-[navi](https://github.com/Jeanno/neoai#navi-in-the-terminal), which the
-installer puts beside it when it isn't there yet (`NEOSH_INSTALL_NAVI=no`
-leaves it out).
-
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Jeanno/neosh/main/install.sh | sh
 ```
 
-This puts `neosh` (and navi) in `~/.local/bin`; run it again to update, or add
-`-s -- --uninstall` to remove it. From a checkout, `./install.sh` builds the
-code you have. Then type `neosh`. It doesn't change your login shell; the
-installer says how, for when you are ready.
+This puts `neosh` in `~/.local/bin`: the prebuilt one from the latest
+[release](https://github.com/Jeanno/neosh/releases) for macOS (arm64 or
+Intel) or Linux (x86_64 or arm64), its sha256 checked. With no release for
+your machine, or with `-s -- --source`, it builds neosh from source, which
+needs [Rust](https://rustup.rs) and git. From a checkout, `./install.sh`
+builds the code you have.
+
+[navi](https://github.com/Jeanno/neoai#navi-in-the-terminal), which needs
+Node 22 or newer, is put beside it when it isn't there yet
+(`NEOSH_INSTALL_NAVI=no` leaves it out). Run the installer again to update,
+or add `-s -- --uninstall` to remove neosh. Then type `neosh`. It doesn't
+change your login shell; the installer says how, for when you are ready.
 
 The first start offers setup (`neosh --setup` any time): the model navi
 answers with, and whether to keep your zsh prompt and colours. It writes
@@ -101,3 +104,17 @@ cargo test
 
 This includes end-to-end tests that drive neosh on a pseudo-terminal
 (`tests/drive.py`, which needs python3) with a stand-in navi.
+
+### Cutting a release
+
+Set `version` in `Cargo.toml` (and run `cargo build` so `Cargo.lock`
+follows), commit, then push a tag of that version:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+`.github/workflows/release.yml` builds neosh for macOS (arm64, x86_64) and
+Linux (x86_64, arm64), and makes a GitHub Release of
+`neosh-<target>.tar.gz` and its `.sha256`, which `install.sh` downloads.
+A tag that is not `Cargo.toml`'s version builds nothing.
