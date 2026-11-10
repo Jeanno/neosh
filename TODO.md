@@ -12,18 +12,20 @@ Newest asks first. Done items move to the log at the bottom.
 
 - `[1]+ Done` printed after ^C on a job brought back with `fg` (brush).
 - Where the "? to ask why" hint sits.
+- navi's example commands with placeholders (`your-command-here`) get typed at the prompt; only a runnable command should be.
 - Tool calls with no words yet (most `browser_*`): give them some.
 
 ## Waiting on the owner
 
-- A Raycast release tag (neoai `raycast-v*`).
 - A prebuilt neosh release.
 - Filing upstream with brush: background jobs survive the terminal closing,
   and a hook in the reedline validator (vendored here, NSH-53).
 - A possible rename of the pm skill.
+- Low priority (deprioritized 2026-11-09): a Raycast release tag (neoai `raycast-v*`).
 
 ## Done
 
+- 2026-11-09: neosh carries a manual navi reads to answer questions about neosh (NSH-59); navi counts tokens and `navi stats` estimates the cost (neoai LED-18 to LED-20).
 - 2026-11-09: decided: `navi setup` stays as it is, with no `claude -p` and no pointer to API credit.
 - 2026-11-09: setup asks once, says what it is for, styles its steps, saves neosh's own look so it is not offered again, and ends with how to begin (NSH-58).
 - 2026-11-09: navi mode runs the command navi offered (NSH-57); wide characters no longer panic the highlighter; navi's spinner no longer hides a y/n question (neoai CLI-45).

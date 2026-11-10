@@ -247,6 +247,10 @@ pub fn ask(navi: &Path, path: Option<&str>, prompt: &str, dir: &Path, session: &
         .env("NAVI_COMMAND_FILE", &handed)
         .env("NAVI_GUTTER", "1")
         .env("NEOROUTER_SEEN", seen_file(session));
+    match manual_file() {
+        Some(manual) => command.env(SHELL_MANUAL, manual),
+        None => command.env_remove(SHELL_MANUAL),
+    };
     if let Some(path) = path {
         command.env("PATH", path);
     }
@@ -320,6 +324,25 @@ pub fn command_file(session: &str) -> PathBuf {
     std::env::temp_dir().join(format!("{session}-command"))
 }
 
+/// NSH-59: neosh's manual, for navi to answer questions about neosh from.
+pub const MANUAL: &str = include_str!("../MANUAL.md");
+
+/// How navi is told where the manual is (neoai CLI-47).
+const SHELL_MANUAL: &str = "NAVI_SHELL_MANUAL";
+
+/// NSH-59: the manual, written once per version to the temporary directory; `None` when it cannot be.
+pub fn manual_file() -> Option<PathBuf> {
+    static FILE: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
+    FILE.get_or_init(|| {
+        let file = std::env::temp_dir().join(format!("neosh-{}-MANUAL.md", env!("CARGO_PKG_VERSION")));
+        if std::fs::read_to_string(&file).ok().as_deref() != Some(MANUAL) {
+            std::fs::write(&file, MANUAL).ok()?;
+        }
+        Some(file)
+    })
+    .clone()
+}
+
 /// NSH-21: where this session's last backend announcement is kept (MOD-28).
 pub fn seen_file(session: &str) -> PathBuf {
     std::env::temp_dir().join(format!("{session}-seen"))
@@ -336,7 +359,10 @@ pub fn take_suggestion(file: &Path) -> Option<String> {
 /// command's output and errors into navi, with what navi is told.
 pub fn piped_line(command: &str, question: &str, navi: &Path, session: &str, recent: &str, file: &Path) -> String {
     let ask = if question.is_empty() { PIPED_ASK } else { question };
-    let recent = if recent.is_empty() { String::new() } else { format!("NAVI_RECENT={} ", quote(recent)) };
+    let mut recent = if recent.is_empty() { String::new() } else { format!("NAVI_RECENT={} ", quote(recent)) };
+    if let Some(manual) = manual_file() {
+        recent.push_str(&format!("{SHELL_MANUAL}={} ", quote(&manual.to_string_lossy())));
+    }
     format!(
         "{{ {command}\n}} 2>&1 | {recent}NAVI_COMMAND_FILE={} NAVI_GUTTER=1 NEOROUTER_SEEN={} {} --session {} -a - -p {}",
         quote(&file.to_string_lossy()),
@@ -481,9 +507,17 @@ mod tests {
         let seen = seen_file("neosh-1");
         assert_eq!(
             line,
-            format!("{{ npm test\n}} 2>&1 | NAVI_RECENT='~ $ ls (ok)' NAVI_COMMAND_FILE='/tmp/c' NAVI_GUTTER=1 NEOROUTER_SEEN='{}' '/bin/navi' --session 'neosh-1' -a - -p 'why'\\''s it red'", seen.display())
+            format!("{{ npm test\n}} 2>&1 | NAVI_RECENT='~ $ ls (ok)' NAVI_SHELL_MANUAL='{}' NAVI_COMMAND_FILE='/tmp/c' NAVI_GUTTER=1 NEOROUTER_SEEN='{}' '/bin/navi' --session 'neosh-1' -a - -p 'why'\\''s it red'", manual_file().unwrap().display(), seen.display())
         );
         assert!(piped_line("ls", "", Path::new("navi"), "s", "", Path::new("f")).ends_with(&format!("-p '{PIPED_ASK}'")));
+    }
+
+    // NSH-59
+    #[test]
+    fn the_manual_is_written_once_for_navi() {
+        let file = manual_file().unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), MANUAL);
+        assert!(MANUAL.starts_with("# neosh"));
     }
 
     // NSH-11
