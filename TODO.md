@@ -25,6 +25,7 @@ Newest asks first. Done items move to the log at the bottom.
 
 ## Done
 
+- 2026-11-09: navi mode runs the command navi offered (NSH-57); wide characters no longer panic the highlighter; navi's spinner no longer hides a y/n question (neoai CLI-45).
 - 2026-11-09: a line for navi is drawn as typed, not highlighted as bash (NSH-56).
 - 2026-11-09: live-tested on Sonnet (Darkbloom was at capacity): an image
   read, a command's recorded output read, `?/resume`, tool calls in words.

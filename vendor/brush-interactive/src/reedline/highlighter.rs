@@ -90,6 +90,12 @@ impl<SE: brush_core::ShellExtensions + 'static> reedline::Highlighter for Reedli
         let spans = highlighting::highlight_command(shell.as_ref(), line, cursor);
 
         let mut styled = reedline::StyledText::new();
+        // neosh: brush can end a span inside a character (`志`), which would
+        // panic; such a line is drawn plain instead.
+        if spans.iter().any(|s| line.get(s.start..s.end).is_none()) {
+            styled.push((Style::new(), line.to_owned()));
+            return styled;
+        }
         for span in spans {
             let style = kind_to_style(span.kind);
             styled.push((style, span.text(line).to_owned()));

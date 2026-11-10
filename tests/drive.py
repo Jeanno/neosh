@@ -17,6 +17,8 @@ out = b''
 def pump(t):
     global out
     end = time.time() + t
+    # Output that never goes quiet (a spinner) is waited on a little, not forever.
+    cap = end + 4
     while time.time() < end:
         r, _, _ = select.select([fd], [], [], 0.05)
         if r:
@@ -26,7 +28,7 @@ def pump(t):
             out += chunk
             # Answer cursor position queries as a terminal does.
             for _ in range(chunk.count(b'\x1b[6n')): os.write(fd, b'\x1b[1;1R')
-            end = max(end, time.time() + 0.3)
+            end = min(cap, max(end, time.time() + 0.3))
     return True
 pump(1.5)
 for l in lines:

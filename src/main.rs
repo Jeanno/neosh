@@ -221,6 +221,8 @@ struct WithNavi<IB: InputBackend> {
     noted: bool,
     /// What navi suggested running, for the next prompt (NSH-11).
     suggested: Option<String>,
+    /// What was put at this prompt for Enter to run, so navi mode runs it (NSH-57).
+    offered: Option<String>,
     /// A line not found as a command, to offer navi (NSH-23).
     missed: Option<String>,
     /// A line run in place of the one typed, and that one, for history (NSH-29).
@@ -261,7 +263,7 @@ impl Marks {
 impl<IB: InputBackend> WithNavi<IB> {
     fn new(inner: IB) -> Self {
         let started = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-        Self { inner, recent: navi::Recent::default(), handed: None, piped: None, noted: false, took: None, suggested: None, missed: None, retyped: None, substituted: bang::Memory::default(), settle: None, session: format!("neosh-{started}-{}", std::process::id()), marks: Marks::from_env(), hinted: 0, told_unrecorded: false }
+        Self { inner, recent: navi::Recent::default(), handed: None, piped: None, noted: false, took: None, suggested: None, offered: None, missed: None, retyped: None, substituted: bang::Memory::default(), settle: None, session: format!("neosh-{started}-{}", std::process::id()), marks: Marks::from_env(), hinted: 0, told_unrecorded: false }
     }
 }
 
@@ -408,7 +410,8 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                 let _ = std::io::stdout().flush();
             }
             // NSH-11: ready to run with Enter, change, or clear with ^C.
-            if let Some(command) = self.suggested.take() {
+            self.offered = self.suggested.take();
+            if let Some(command) = self.offered.clone() {
                 let end = command.len();
                 self.inner.set_read_buffer(command, end);
             }
@@ -430,8 +433,10 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                 }
                 read => return Ok(read),
             };
+            // NSH-57: the command navi offered, run as offered, is for the shell.
+            let ran_offered = in_mode && self.offered.take().is_some_and(|o| o.trim() == line.trim() && !o.trim_start().starts_with('?'));
             // NSH-54: in navi mode a line is a question, as if typed after `?`.
-            if in_mode {
+            if in_mode && !ran_offered {
                 let typed = line.trim().to_string();
                 if typed.is_empty() {
                     continue;
@@ -483,7 +488,7 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                 }
                 _ => {}
             }
-            let what = match in_mode {
+            let what = match in_mode && !ran_offered {
                 true => navi::Line::Navi(line.trim()[1..].trim().to_string()),
                 false => navi::classify_in(&line, ask, |word| guard.as_mut().is_none_or(|s| is_command(s, word)), |word| navi::globs_a_file(word, &dir)),
             };

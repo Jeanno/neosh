@@ -247,6 +247,28 @@ fn a_line_for_navi_is_not_highlighted_as_bash() {
     assert!(!raw.contains("mquoted") && !raw.contains("mnaviside"), "{raw}");
 }
 
+// NSH-56: brush could end a span inside a character and panic.
+#[test]
+fn a_line_with_wide_characters_is_highlighted_without_a_panic() {
+    let home = Home::new("wide");
+    let screen = home.run(&["echo 同志 \"x\"", "echo \"同志\" $HOME", "echo $(echo 志) ${HOME}志", "echo still-here", "exit"], &[]);
+    assert!(!screen.contains("panicked"), "{screen}");
+    assert!(screen.contains("同志 x"), "{screen}");
+    assert!(screen.lines().any(|l| l.trim() == "still-here"), "{screen}");
+}
+
+// NSH-57
+#[test]
+fn in_navi_mode_the_offered_command_runs_in_the_shell() {
+    let home = Home::new("offered");
+    let screen = home.run(&["?", "suggest something", "", "?changed it", "@esc", "exit"], &[]);
+    let log = home.log();
+    // Enter on what navi offered ran it, and the mode went on.
+    assert!(screen.lines().any(|l| l.trim() == "suggested-ran"), "{screen}");
+    assert_eq!(log.matches("ARGS:").count(), 2, "{log}");
+    assert!(log.contains("-p ?changed it") || log.contains("-p changed it"), "{log}");
+}
+
 // NSH-24
 #[test]
 fn history_expands_as_in_bash() {

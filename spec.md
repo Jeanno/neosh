@@ -206,10 +206,15 @@ hands a line to another shell. What neosh adds is below.
 - NSH-9: `?` alone turns navi mode on (NSH-54), and when the command just
   run failed, asks navi why, and how to fix it (NSH-20), first. With no `navi` on `$PATH`, a line
   for navi says so and how to install it, and runs nothing.
+- NSH-57: In navi mode, the command navi offered (NSH-11), run with Enter
+  as it was put there, runs in the shell, and the mode goes on after it.
+  Changed in any way, the line is a question again.
 - NSH-56: A line that goes to navi (one starting with `?`, any line in
   navi mode, or what `NEOSH_ASK` sends, NSH-9) is drawn as typed, in the
   terminal's own colour, not highlighted as bash: its quotes, `$` and
-  words are words. A line for the shell is highlighted as before.
+  words are words. A line for the shell is highlighted as before, and one
+  whose highlighting would cut a wide character (`志`) in two is drawn plain
+  rather than ending the shell.
 - NSH-55: `?/resume` lists the conversations earlier neosh shells had with
   navi (`navi sessions --json`, SES-18), newest first and at most nine: how
   long ago, the directory, and the last thing asked. Enter takes the first,
