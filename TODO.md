@@ -21,10 +21,10 @@ Newest asks first. Done items move to the log at the bottom.
 - Filing upstream with brush: background jobs survive the terminal closing,
   and a hook in the reedline validator (vendored here, NSH-53).
 - A possible rename of the pm skill.
-- Whether `navi setup` should offer `claude -p` or point at API credit.
 
 ## Done
 
+- 2026-11-09: decided: `navi setup` stays as it is, with no `claude -p` and no pointer to API credit.
 - 2026-11-09: setup asks once, says what it is for, styles its steps, saves neosh's own look so it is not offered again, and ends with how to begin (NSH-58).
 - 2026-11-09: navi mode runs the command navi offered (NSH-57); wide characters no longer panic the highlighter; navi's spinner no longer hides a y/n question (neoai CLI-45).
 - 2026-11-09: a line for navi is drawn as typed, not highlighted as bash (NSH-56).
