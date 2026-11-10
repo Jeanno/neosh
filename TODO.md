@@ -13,6 +13,9 @@ Newest asks first. Done items move to the log at the bottom.
 - `[1]+ Done` printed after ^C on a job brought back with `fg` (brush).
 - Where the "? to ask why" hint sits.
 - navi's example commands with placeholders (`your-command-here`) get typed at the prompt; only a runnable command should be.
+- navi, away and done, shows its answer at the next prompt, not while you sit at an empty one (reedline's external printer could).
+- navi offered the output of a command (`Mon Nov  9 …`) as the command to type; with the placeholder item above, only a runnable command should be (neoai).
+- navi's write tool takes `~/x` literally, making a `~` directory; the model then guessed a home from the path (neoai).
 - Tool calls with no words yet (most `browser_*`): give them some.
 
 ## Waiting on the owner
@@ -25,6 +28,7 @@ Newest asks first. Done items move to the log at the bottom.
 
 ## Done
 
+- 2026-11-09: ^Z sends navi to the background while it works; `?` brings it back, the next prompt shows its answer or that it waits for you (NSH-62, neoai CLI-48).
 - 2026-11-09: `install.sh` installs navi too when it is missing, without asking (NSH-61); `?/usage` runs `navi usage` (NSH-60).
 - 2026-11-09: neosh carries a manual navi reads to answer questions about neosh (NSH-59); navi counts tokens and `navi usage` (`?/usage` here) estimates the cost (neoai LED-18 to LED-20).
 - 2026-11-09: decided: `navi setup` stays as it is, with no `claude -p` and no pointer to API credit.

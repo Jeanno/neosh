@@ -96,6 +96,16 @@ navi's manual, `navi setup` and `navi usage`. This manual covers the shell.
 - History keeps each navi-mode question with its `?`, so recalled outside the mode it asks
   again.
 
+### Working while navi works
+
+- navi never has to hold up the shell. While it answers, press ^Z: it keeps working in the
+  background and your prompt comes back at once (navi mode is left).
+- When it is done, the next prompt shows its answer, and the command it suggests is typed
+  there as usual. If it needs a yes or no meanwhile, the next prompt says so.
+- `?` alone brings it back to the screen, with what it wrote while away; answer it there.
+- Another question, or `| ?`, waits until it is done. navi hears about the commands you ran
+  meanwhile with your next question. Closing neosh stops it.
+
 ### Piping output to navi
 
 - `cmd |?question` runs the command and hands navi what it printed, errors too:
@@ -258,6 +268,8 @@ manual, `?/usage` (or `navi usage`) for tokens and cost, and `navi setup` to cha
 **My line went to navi but I meant a command.** With `NEOSH_ASK=sentences`, run it as
 `command <line>`, or set `NEOSH_ASK=marked`. A line starting with `?*` or a matching glob
 stays the shell's.
+
+**navi is taking a while and I want my prompt.** Press ^Z; `?` brings it back.
 
 **How do I get out of navi mode?** Press Esc, or type `exit` or ^D. The shell keeps running.
 

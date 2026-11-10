@@ -4,6 +4,7 @@
 //! starting it follows brush-shell's entry. What neosh adds is the line
 //! reader around brush's own, which sends lines for navi to navi (NSH-4).
 
+mod away;
 mod bang;
 mod cd;
 mod errors;
@@ -238,6 +239,8 @@ struct WithNavi<IB: InputBackend> {
     hinted: u32,
     /// NSH-34: whether `?` has said output is not kept.
     told_unrecorded: bool,
+    /// NSH-62: navi, sent to the background with ^Z, working on.
+    away: Option<away::Navi>,
 }
 
 /// What neosh needs to mark commands for the recorder (NSH-36, NSH-40).
@@ -263,7 +266,7 @@ impl Marks {
 impl<IB: InputBackend> WithNavi<IB> {
     fn new(inner: IB) -> Self {
         let started = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-        Self { inner, recent: navi::Recent::default(), handed: None, piped: None, noted: false, took: None, suggested: None, offered: None, missed: None, retyped: None, substituted: bang::Memory::default(), settle: None, session: format!("neosh-{started}-{}", std::process::id()), marks: Marks::from_env(), hinted: 0, told_unrecorded: false }
+        Self { inner, recent: navi::Recent::default(), handed: None, piped: None, noted: false, took: None, suggested: None, offered: None, missed: None, retyped: None, substituted: bang::Memory::default(), settle: None, session: format!("neosh-{started}-{}", std::process::id()), marks: Marks::from_env(), hinted: 0, told_unrecorded: false, away: None }
     }
 }
 
@@ -272,6 +275,44 @@ impl<IB: InputBackend> Drop for WithNavi<IB> {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(navi::seen_file(&self.session));
         let _ = std::fs::remove_file(navi::command_file(&self.session));
+    }
+}
+
+impl<IB: InputBackend> WithNavi<IB> {
+    /// NSH-62: navi gave the screen back: done, or sent away with ^Z.
+    fn answered(&mut self, shell: &ShellRef<impl brush_core::ShellExtensions>, n: away::Navi, how: away::Ended) {
+        let mut guard = shell.try_lock().ok();
+        match how {
+            away::Ended::Done(status) => {
+                self.suggested = navi::take_suggestion(&n.handed);
+                if let Some(s) = guard.as_mut() {
+                    s.set_last_exit_status(status);
+                }
+            }
+            away::Ended::Away => {
+                navi_mode(guard.as_deref_mut(), false);
+                eprintln!("\r\n{}", dim_if(guard.as_deref(), "· navi works on in the background: ? brings it back"));
+                if let Some(s) = guard.as_mut() {
+                    s.set_last_exit_status(0);
+                }
+                self.away = Some(n);
+            }
+        }
+    }
+}
+
+/// NSH-62: what a question, or `| ?`, says while navi is away.
+fn still_away<SE: brush_core::ShellExtensions>(away: Option<&away::Navi>, shell: Option<&brush_core::Shell<SE>>) {
+    if let Some(n) = away {
+        eprintln!("{}", dim_if(shell, &format!("· navi is still on ?{}: ? brings it back, and then you can ask", n.ask)));
+    }
+}
+
+/// Dim, unless `NO_COLOR` says not to.
+fn dim_if<SE: brush_core::ShellExtensions>(shell: Option<&brush_core::Shell<SE>>, text: &str) -> String {
+    match shell.is_some_and(|s| s.env_str("NO_COLOR").is_none()) {
+        true => format!("\x1b[2m{text}\x1b[0m"),
+        false => text.to_string(),
     }
 }
 
@@ -362,6 +403,27 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                     self.missed = Some(line.clone());
                 }
                 self.recent.push(navi::Ran { line, dir, status, took, output });
+            }
+            // NSH-62: navi, away, done or waiting on you.
+            if let Some(n) = self.away.as_mut() {
+                if let Some((status, held)) = n.done() {
+                    eprintln!("{}", dim_if(guard.as_deref(), &format!("· navi is done with ?{}", n.ask)));
+                    let mut out = std::io::stdout().lock();
+                    let _ = out.write_all(&held);
+                    if !held.ends_with(b"\n") {
+                        let _ = out.write_all(b"\r\n");
+                    }
+                    let _ = out.flush();
+                    drop(out);
+                    self.suggested = navi::take_suggestion(&n.handed);
+                    if let Some(s) = guard.as_mut() {
+                        s.set_last_exit_status(status);
+                    }
+                    self.away = None;
+                } else if n.asking() && !n.told {
+                    n.told = true;
+                    eprintln!("{}", dim_if(guard.as_deref(), &format!("· navi waits for your answer about ?{}: ? to answer", n.ask)));
+                }
             }
             // NSH-33: zsh's precmd, the status left for the prompt; a PS1 it set counts.
             let mut composed = prompt.prompt.clone();
@@ -531,6 +593,10 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                     }
                     return Ok(ReadResult::Input(line));
                 }
+                navi::Line::Piped { .. } if self.away.is_some() => {
+                    still_away(self.away.as_ref(), guard.as_deref());
+                    continue;
+                }
                 navi::Line::Piped { command, question } => {
                     let Some(found) = guard.as_ref().and_then(|s| s.find_first_executable_in_path("navi")) else {
                         if let Some(s) = guard.as_mut() {
@@ -553,6 +619,18 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                     self.piped = Some((ran.clone(), line.trim_end_matches('\n').to_string()));
                     self.settle = Some((line.trim().to_string(), keep));
                     return Ok(ReadResult::Input(ran));
+                }
+                // NSH-62: `?` alone brings navi back; another question waits for it.
+                navi::Line::Navi(ask) if self.away.is_some() => {
+                    if !ask.is_empty() {
+                        still_away(self.away.as_ref(), guard.as_deref());
+                        continue;
+                    }
+                    drop(guard);
+                    let mut n = self.away.take().expect("navi away");
+                    let ended = n.attach();
+                    self.answered(shell, n, ended);
+                    continue;
                 }
                 navi::Line::Navi(ask) => {
                     // NSH-60: `?/usage` shows what navi has used and cost, as `navi usage` does.
@@ -650,13 +728,26 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                         self.noted = true;
                         eprintln!("{}", navi::SENTENCE_NOTE);
                     }
-                    match navi::ask(&found, path.as_deref(), &ask, &dir, &self.session, &self.recent.describe(home.as_deref())) {
-                        Ok((status, suggested)) => {
-                            self.recent.clear();
-                            self.suggested = suggested;
-                            ended(status);
+                    let command = navi::command(&found, path.as_deref(), &ask, &dir, &self.session, &self.recent.describe(home.as_deref()));
+                    // What navi was told about; what runs while it is away, it hears of next time.
+                    self.recent.clear();
+                    // NSH-62: on a terminal of its own, so ^Z can send it away.
+                    match away::start(command, &ask, navi::command_file(&self.session)) {
+                        Ok(mut n) => {
+                            let how = n.attach();
+                            self.answered(shell, n, how);
                         }
-                        Err(e) => {
+                        Err(away::Failed::NoTerminal(mut command)) => match command.status() {
+                            Ok(status) => {
+                                self.suggested = navi::take_suggestion(&navi::command_file(&self.session));
+                                ended(navi::status_of(status));
+                            }
+                            Err(e) => {
+                                eprintln!("neosh: could not start navi: {e}");
+                                ended(126);
+                            }
+                        },
+                        Err(away::Failed::Spawn(e)) => {
                             eprintln!("neosh: could not start navi: {e}");
                             ended(126);
                         }

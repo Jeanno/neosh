@@ -237,7 +237,8 @@ Install it: curl -fsSL https://raw.githubusercontent.com/Jeanno/neoai/master/neo
 /// NSH-5, NSH-7, NSH-11: navi's answer in the terminal, in `dir`, in this
 /// session's conversation; how navi ended (NSH-28) and the command it suggests, if any.
 /// `navi` is the program the shell found on its own `$PATH`, which is passed on too.
-pub fn ask(navi: &Path, path: Option<&str>, prompt: &str, dir: &Path, session: &str, recent: &str) -> Result<(u8, Option<String>), std::io::Error> {
+/// It is run on a terminal of navi's own, so ^Z can send it away (NSH-62).
+pub fn command(navi: &Path, path: Option<&str>, prompt: &str, dir: &Path, session: &str, recent: &str) -> Command {
     let handed = command_file(session);
     let _ = std::fs::remove_file(&handed);
     let mut command = Command::new(navi);
@@ -246,6 +247,8 @@ pub fn ask(navi: &Path, path: Option<&str>, prompt: &str, dir: &Path, session: &
         .current_dir(dir)
         .env("NAVI_COMMAND_FILE", &handed)
         .env("NAVI_GUTTER", "1")
+        // neoai CLI-48: so neosh can say when navi, away, waits for an answer.
+        .env("NAVI_MARK_QUESTIONS", "1")
         .env("NEOROUTER_SEEN", seen_file(session));
     match manual_file() {
         Some(manual) => command.env(SHELL_MANUAL, manual),
@@ -259,8 +262,7 @@ pub fn ask(navi: &Path, path: Option<&str>, prompt: &str, dir: &Path, session: &
     } else {
         command.env_remove("NAVI_RECENT");
     }
-    let ended = command.status()?;
-    Ok((status_of(ended), take_suggestion(&handed)))
+    command
 }
 
 /// NSH-55: a conversation an earlier neosh had with navi, from `navi sessions --json` (SES-18).

@@ -231,6 +231,14 @@ hands a line to another shell. What neosh adds is below.
   estimated, by model: it runs `navi usage` (neoai LED-19) on the terminal,
   with whatever follows it (`?/usage --days 7`). With no `navi` on `$PATH`
   it says so, as NSH-9 does.
+- NSH-62: navi never holds the shell up. While it answers, ^Z sends it to
+  the background: it works on and the prompt comes back at once (navi mode
+  is left). What it writes meanwhile is held. When it is done, the next
+  prompt shows its answer, and the command it suggests is typed there
+  (NSH-11). When it waits for a yes or no (neoai CLI-48), the next prompt
+  says so. `?` alone brings it back, what it held first; another question,
+  or `| ?`, waits until it is done and says so. It sees the commands run
+  while it was away with the next question. Closing neosh stops it.
 - NSH-57: In navi mode, the command navi offered (NSH-11), run with Enter
   as it was put there, runs in the shell, and the mode goes on after it.
   Changed in any way, the line is a question again.
