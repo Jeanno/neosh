@@ -301,6 +301,18 @@ pub fn saved(navi: &Path, path: Option<&str>, current: &str) -> Vec<Saved> {
     command.output().map(|out| saved_from(&String::from_utf8_lossy(&out.stdout), current)).unwrap_or_default()
 }
 
+/// NSH-60: `navi usage`, with what followed `?/usage` (`--days 7`), on this terminal.
+pub fn usage(navi: &Path, path: Option<&str>, args: &str) {
+    let mut command = Command::new(navi);
+    command.arg("usage").args(args.split_whitespace());
+    if let Some(path) = path {
+        command.env("PATH", path);
+    }
+    if let Err(e) = command.status() {
+        eprintln!("neosh: could not run navi: {e}");
+    }
+}
+
 /// NSH-55: one line of the list `?/resume` shows.
 pub fn saved_line(n: usize, s: &Saved, home: Option<&Path>) -> String {
     let dir = s.cwd.as_deref().map(|d| crate::prompt::tilde(d, home)).unwrap_or_default();

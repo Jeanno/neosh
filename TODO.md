@@ -25,7 +25,7 @@ Newest asks first. Done items move to the log at the bottom.
 
 ## Done
 
-- 2026-11-09: neosh carries a manual navi reads to answer questions about neosh (NSH-59); navi counts tokens and `navi stats` estimates the cost (neoai LED-18 to LED-20).
+- 2026-11-09: neosh carries a manual navi reads to answer questions about neosh (NSH-59); navi counts tokens and `navi usage` (`?/usage` here) estimates the cost (neoai LED-18 to LED-20).
 - 2026-11-09: decided: `navi setup` stays as it is, with no `claude -p` and no pointer to API credit.
 - 2026-11-09: setup asks once, says what it is for, styles its steps, saves neosh's own look so it is not offered again, and ends with how to begin (NSH-58).
 - 2026-11-09: navi mode runs the command navi offered (NSH-57); wide characters no longer panic the highlighter; navi's spinner no longer hides a y/n question (neoai CLI-45).

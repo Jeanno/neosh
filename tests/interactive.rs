@@ -8,6 +8,7 @@ use std::process::Command;
 /// prompt asking for a suggestion hands one back (CLI-41).
 const STAND_IN: &str = r#"#!/bin/sh
 [ "$1" = sessions ] && { cat "$HOME/sessions.json" 2>/dev/null; exit 0; }
+[ "$1" = usage ] && { echo "USAGE GIVEN: $*"; exit 0; }
 { echo "ARGS: $*"; echo "PWD: $PWD"; printf 'RECENT: %s\n' "$NAVI_RECENT"; echo "INDEX: $NAVI_SHELL_INDEX"; [ -t 0 ] || echo "STDIN: $(cat)"; echo ---; } >> "$HOME/navi.log"
 [ -n "$NAVI_SHELL_INDEX" ] && rm -rf "$HOME/rec" && cp -R "$(dirname "$NAVI_SHELL_INDEX")" "$HOME/rec"
 case "$*" in *suggest*) echo 'echo suggested-ran' > "$NAVI_COMMAND_FILE" ;; esac
@@ -189,6 +190,17 @@ fn a_question_mark_alone_after_a_failure_asks_why() {
     assert!(log.contains("~/work $ ls missing-folder (exit 1, printed 1 line: "), "{log}");
     // Each time, the mode begins; after a command that worked, nothing is asked.
     assert_eq!(screen.matches("navi mode: each line goes to navi").count(), 2, "{screen}");
+}
+
+// NSH-60
+#[test]
+fn usage_runs_navi_usage() {
+    let home = Home::new("usage");
+    let screen = home.run(&["?/usage", "?/usage --days 7", "exit"], &[]);
+    assert!(screen.contains("USAGE GIVEN: usage\r") || screen.contains("USAGE GIVEN: usage\n"), "{screen}");
+    assert!(screen.contains("USAGE GIVEN: usage --days 7"), "{screen}");
+    // Not a question: navi was never asked.
+    assert!(!home.log().contains("ARGS:"), "{}", home.log());
 }
 
 // NSH-55

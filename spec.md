@@ -221,6 +221,10 @@ hands a line to another shell. What neosh adds is below.
   navi it hands the manual's path over as `NAVI_SHELL_MANUAL` (neoai CLI-47),
   written first to a file of this version's in the temporary directory, so
   navi answers a question about neosh from it (neoai PRM-15).
+- NSH-60: `?/usage` shows the tokens navi has used and what they cost,
+  estimated, by model: it runs `navi usage` (neoai LED-19) on the terminal,
+  with whatever follows it (`?/usage --days 7`). With no `navi` on `$PATH`
+  it says so, as NSH-9 does.
 - NSH-57: In navi mode, the command navi offered (NSH-11), run with Enter
   as it was put there, runs in the shell, and the mode goes on after it.
   Changed in any way, the line is a question again.

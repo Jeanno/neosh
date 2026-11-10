@@ -5,7 +5,7 @@ run it, using brush's bash interpreter. A line starting with `?` goes to navi in
 knows what you have just been running in this terminal.
 
 For questions about navi itself (which model answers, cost, approvals, undo, memory), see
-navi's manual, `navi setup` and `navi stats`. This manual covers the shell.
+navi's manual, `navi setup` and `navi usage`. This manual covers the shell.
 
 ## Install, update, uninstall
 
@@ -126,6 +126,8 @@ navi's manual, `navi setup` and `navi stats`. This manual covers the shell.
 - `?/resume` lists earlier neosh conversations (newest first, up to nine): how long ago, the
   directory, and the last thing asked. Enter picks the first, a number another; anything else
   resumes nothing. Later questions continue that conversation.
+- `?/usage` shows the tokens navi has used and what they cost, estimated, by model, over
+  the last 30 days; `?/usage --days 7` for a week. It is `navi usage` run for you.
 
 ### NEOSH_ASK
 
@@ -248,7 +250,7 @@ The line runs nothing and its status is 127.
 step runs it).
 
 **Which model answered, what did it cost, why did it ask?** These are navi's: see navi's
-manual, `navi stats` for usage and cost, and `navi setup` to change the model.
+manual, `?/usage` (or `navi usage`) for tokens and cost, and `navi setup` to change the model.
 
 **My line went to navi but I meant a command.** With `NEOSH_ASK=sentences`, run it as
 `command <line>`, or set `NEOSH_ASK=marked`. A line starting with `?*` or a matching glob

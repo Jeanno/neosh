@@ -555,6 +555,18 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                     return Ok(ReadResult::Input(ran));
                 }
                 navi::Line::Navi(ask) => {
+                    // NSH-60: `?/usage` shows what navi has used and cost, as `navi usage` does.
+                    if ask == "/usage" || ask.starts_with("/usage ") {
+                        let found = guard.as_ref().and_then(|s| s.find_first_executable_in_path("navi"));
+                        let path = guard.as_ref().and_then(|s| s.env_str("PATH").map(|p| p.into_owned()));
+                        drop(guard);
+                        let Some(found) = found else {
+                            eprintln!("{}", navi::NOT_INSTALLED);
+                            continue;
+                        };
+                        navi::usage(&found, path.as_deref(), &ask["/usage".len()..]);
+                        continue;
+                    }
                     // NSH-55: `?/resume` takes up a conversation an earlier neosh had.
                     if ask == "/resume" {
                         let found = guard.as_ref().and_then(|s| s.find_first_executable_in_path("navi"));
