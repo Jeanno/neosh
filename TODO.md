@@ -25,6 +25,7 @@ Newest asks first. Done items move to the log at the bottom.
 
 ## Done
 
+- 2026-11-09: `install.sh` installs navi too when it is missing, without asking (NSH-61); `?/usage` runs `navi usage` (NSH-60).
 - 2026-11-09: neosh carries a manual navi reads to answer questions about neosh (NSH-59); navi counts tokens and `navi usage` (`?/usage` here) estimates the cost (neoai LED-18 to LED-20).
 - 2026-11-09: decided: `navi setup` stays as it is, with no `claude -p` and no pointer to API credit.
 - 2026-11-09: setup asks once, says what it is for, styles its steps, saves neosh's own look so it is not offered again, and ends with how to begin (NSH-58).

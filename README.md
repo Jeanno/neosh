@@ -26,14 +26,16 @@ would not.
 
 ## Install
 
-You need [Rust](https://rustup.rs) to build it and
-[navi](https://github.com/Jeanno/neoai#navi-in-the-terminal) on your `$PATH`.
+You need [Rust](https://rustup.rs) to build it, and Node 22 or newer for
+[navi](https://github.com/Jeanno/neoai#navi-in-the-terminal), which the
+installer puts beside it when it isn't there yet (`NEOSH_INSTALL_NAVI=no`
+leaves it out).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Jeanno/neosh/main/install.sh | sh
 ```
 
-This puts `neosh` in `~/.local/bin`; run it again to update, or add
+This puts `neosh` (and navi) in `~/.local/bin`; run it again to update, or add
 `-s -- --uninstall` to remove it. From a checkout, `./install.sh` builds the
 code you have. Then type `neosh`. It doesn't change your login shell; the
 installer says how, for when you are ready.

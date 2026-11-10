@@ -76,11 +76,26 @@ case ":$PATH:" in
   *":$bin_dir:"*) ;;
   *) say "" ; say "$bin_dir is not on your PATH. Add it to your shell's startup file:" ; say "  export PATH=\"$bin_dir:\$PATH\"" ;;
 esac
-command -v navi >/dev/null 2>&1 || {
+# navi answers neosh's ? lines, so it comes too; NEOSH_INSTALL_NAVI=no leaves it out.
+navi_url=${NEOSH_NAVI_INSTALLER:-https://raw.githubusercontent.com/Jeanno/neoai/master/neonavi/install.sh}
+if ! command -v navi >/dev/null 2>&1 && [ ! -x "$bin_dir/navi" ]; then
   say ""
-  say "To ask navi from neosh, install navi too:"
-  say "  curl -fsSL https://raw.githubusercontent.com/Jeanno/neoai/master/neonavi/install.sh | sh"
-}
+  if [ "${NEOSH_INSTALL_NAVI:-yes}" != no ]; then
+    say "Installing navi…"
+    # Fetched whole first: piped, a failed download would run as an empty script and pass.
+    navi_sh=$(mktemp "${TMPDIR:-/tmp}/navi-install.XXXXXX")
+    if command -v curl >/dev/null 2>&1 && curl -fsSL "$navi_url" -o "$navi_sh" && NAVI_BIN_DIR="$bin_dir" sh "$navi_sh"; then
+      say "navi is installed. neosh asks you to choose its model the first time it starts."
+    else
+      say "navi was not installed (see above); neosh is. To try again:"
+      say "  curl -fsSL $navi_url | sh"
+    fi
+    rm -f "$navi_sh"
+  else
+    say "To ask navi from neosh, install navi too:"
+    say "  curl -fsSL $navi_url | sh"
+  fi
+fi
 say ""
 say "Try it: neosh"
 say "To make it your login shell later (asks for your password):"

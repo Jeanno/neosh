@@ -23,7 +23,10 @@ navi's manual, `navi setup` and `navi usage`. This manual covers the shell.
 - It replaces or removes only a neosh: if `~/.local/bin/neosh` is something else, it stops.
 - If `~/.local/bin` is not on your `PATH`, the installer says to add
   `export PATH="$HOME/.local/bin:$PATH"` to your shell's startup file.
-- If `navi` is not installed, the installer says how to install it.
+- If `navi` is not installed, the installer installs it too, into the same directory, with
+  navi's own installer (it needs Node 22 or newer, and says so). `NEOSH_INSTALL_NAVI=no`
+  leaves navi out. If navi's install fails, neosh is still installed and the installer says
+  how to try again.
 - It never changes your login shell or `/etc/shells`.
 
 ## Starting neosh

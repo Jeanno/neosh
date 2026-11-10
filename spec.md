@@ -30,6 +30,12 @@ hands a line to another shell. What neosh adds is below.
   updates; `--uninstall` removes it. It replaces or removes only a neosh,
   leaves history and `~/.neoshrc` alone, and never changes the login shell
   or `/etc/shells`: it says how.
+- NSH-61: When there is no `navi` on `$PATH` or in the install directory,
+  `install.sh` installs it too, without asking, by navi's own installer
+  (neoai `neonavi/install.sh`) into the same directory. That installer says
+  what it needs (Node 22 or newer) when it is missing; neosh stays installed
+  either way, and the installer says how to try again.
+  `NEOSH_INSTALL_NAVI=no` leaves navi out and says how to install it.
 
 ## Setup
 
