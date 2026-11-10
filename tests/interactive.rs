@@ -235,6 +235,18 @@ fn navi_mode_sends_every_line_until_esc() {
     assert!(history.contains("?what is here"), "{history}");
 }
 
+// NSH-56
+#[test]
+fn a_line_for_navi_is_not_highlighted_as_bash() {
+    let home = Home::new("plain");
+    let raw = home.run(&["echo \"shellside\"", "?what is \"quoted\" here", "?", "echo \"naviside\" $HOME", "exit", "exit"], &[("DRIVE_RAW", "1")]);
+    // The shell's line is coloured; navi's are drawn as typed.
+    assert!(raw.contains("ESC[33mshellside"), "{raw}");
+    assert!(raw.contains("?what is \"quoted\" here"), "{raw}");
+    assert!(raw.contains("echo \"naviside\" $HOME"), "{raw}");
+    assert!(!raw.contains("mquoted") && !raw.contains("mnaviside"), "{raw}");
+}
+
 // NSH-24
 #[test]
 fn history_expands_as_in_bash() {

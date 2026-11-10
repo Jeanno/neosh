@@ -73,12 +73,19 @@ pub(crate) struct ReedlineHighlighter<SE: brush_core::ShellExtensions> {
     pub shell: refs::ShellRef<SE>,
 }
 
-impl<SE: brush_core::ShellExtensions> reedline::Highlighter for ReedlineHighlighter<SE> {
+impl<SE: brush_core::ShellExtensions + 'static> reedline::Highlighter for ReedlineHighlighter<SE> {
     #[expect(clippy::significant_drop_tightening)]
     fn highlight(&self, line: &str, cursor: usize) -> reedline::StyledText {
-        let shell = tokio::task::block_in_place(|| {
+        let mut shell = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(self.shell.lock())
         });
+
+        // neosh: a line for navi is words, not bash.
+        if super::validator::for_navi(line, &mut *shell) {
+            let mut styled = reedline::StyledText::new();
+            styled.push((Style::new(), line.to_owned()));
+            return styled;
+        }
 
         let spans = highlighting::highlight_command(shell.as_ref(), line, cursor);
 

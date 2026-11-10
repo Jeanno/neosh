@@ -2,7 +2,8 @@
 # each line is typed once the output goes quiet, `@wait N` waits N seconds,
 # `@type TEXT` types without Enter, `@esc` presses Esc alone,
 # and the cursor-position queries a line editor makes are answered. Prints
-# what the screen showed, escape sequences taken out.
+# what the screen showed, escape sequences taken out, or with DRIVE_RAW=1
+# in the environment, as it was sent, escapes shown as `ESC`.
 #
 #   python3 drive.py <program> <line>...
 import os, pty, sys, time, select, re, fcntl, termios, struct
@@ -39,5 +40,7 @@ for l in lines:
 pump(1)
 try: os.kill(pid, 9)
 except: pass
+if os.environ.get('DRIVE_RAW') == '1':
+    print(out.replace(b'\x1b', b'ESC').replace(b'\r', b'').decode(errors='replace')); sys.exit()
 text = re.sub(rb'\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\x07]*\x07|\r', b'', out).decode(errors='replace')
 print('\n'.join(l for l in text.split('\n') if l.strip()))

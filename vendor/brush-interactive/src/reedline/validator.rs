@@ -16,6 +16,12 @@ pub fn set_completes(check: Completes) {
     let _ = COMPLETES.set(check);
 }
 
+/// neosh: whether the line is for navi by the check above, so it is drawn
+/// as typed rather than highlighted as bash.
+pub(crate) fn for_navi(line: &str, shell: &mut dyn std::any::Any) -> bool {
+    COMPLETES.get().is_some_and(|check| check(line, shell))
+}
+
 impl<SE: brush_core::ShellExtensions + 'static> reedline::Validator for ReedlineValidator<SE> {
     fn validate(&self, line: &str) -> reedline::ValidationResult {
         let mut shell = tokio::task::block_in_place(|| {

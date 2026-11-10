@@ -25,6 +25,7 @@ Newest asks first. Done items move to the log at the bottom.
 
 ## Done
 
+- 2026-11-09: a line for navi is drawn as typed, not highlighted as bash (NSH-56).
 - 2026-11-09: live-tested on Sonnet (Darkbloom was at capacity): an image
   read, a command's recorded output read, `?/resume`, tool calls in words.
 - 2026-11-09: `?/resume` picks up an earlier shell's conversation (NSH-55, SES-18).
