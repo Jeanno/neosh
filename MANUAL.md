@@ -208,7 +208,8 @@ prompt clears once navi has answered.
 - After a failed command, the status shows before `$` in red: `~/proj main 1 $`.
 - A command that took 5 seconds or more shows its time: `~/proj main 1m 4s $`.
 - `NO_COLOR` turns colour off.
-- Set `PS1` in `~/.neoshrc` (or the environment) to use your own prompt.
+- Set `PS1` in `~/.neoshrc` (or the environment) to use your own prompt. A zsh prompt
+  exported from zsh (powerlevel10k's, say) is not used, since bash cannot show it.
 - The terminal title shows the directory while waiting and the command while running. The
   directory is reported so new tabs open there, and VS Code's terminal gets command marks.
 
@@ -234,9 +235,8 @@ records the directories you go to in `~/.z`, and `z <words>` goes to the one tha
 the one you use most and most lately. `z neo sh` finds `~/Projects/neosh`; `z -l` lists
 them; `z -x` forgets this directory. `plugin update` brings it up to date.
 
-**Aliases** run as bash runs them. One with a redirect, pipe, quote or `;` in it (as
-rupa/z's `alias z='_z 2>&1'`) becomes a function of the same name before the next prompt,
-so `alias` no longer lists it but it works as it would in bash.
+**Aliases** run as bash runs them, redirects, pipes, quotes and `;` included (as rupa/z's
+`alias z='_z 2>&1'`).
 
 ## Hooks and integrations
 

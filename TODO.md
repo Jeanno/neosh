@@ -7,21 +7,20 @@ Newest asks first. Done items move to the log at the bottom.
 
 ## Next
 
-- A job started with `&` has no pid in brush (`[1]+ <pid unknown>`), so `fg` cannot hand it the terminal and ^C does not stop it; `bg` says nothing (brush, NSH-3).
+- Fix in the brush fork (branch `neosh`, see README), one commit each, then drop neosh's workaround where there is one; nothing is posted on reubeno/brush:
+  - a job started with `&` has no pid (`[1]+ <pid unknown>`), so `fg` cannot hand it the terminal and ^C does not stop it; `bg` says nothing (NSH-3);
+  - `\#` and `\!` in a prompt (worked around in vendor/brush-interactive, NSH-72);
+  - background jobs survive the terminal closing; `fg` leaves a job that ended in the foreground in the job list (worked around, NSH-63);
+  - `select` does not parse; `globstar`'s `**/x` names paths that are not there; `coproc` can stop neosh.
 - Where the "? to ask why" hint sits.
 
 ## Waiting on the owner
 
-- Filing upstream with brush: background jobs survive the terminal closing,
-  a hook in the reedline validator (vendored here, NSH-53), and `fg` leaving
-  a job that ended in the foreground in the job list, so it is reported
-  `Done` (worked around in neosh's `fg`, NSH-63), and an alias's text split at
-  spaces and never parsed, so `alias e='echo hi 2>&1'; e` prints `hi 2>&1`
-  (brush-core 0.5.0 `interp.rs`, its TODO #57; worked around in neosh, NSH-71).
 - A possible rename of the pm skill.
 - Low priority (deprioritized 2026-11-09): a Raycast release tag (neoai `raycast-v*`).
 
 ## Done
+- 2026-11-11: neosh builds on its brush fork (branch `neosh`); aliases are expanded in the text before parsing, as bash (NSH-71, in brush, neosh's workaround gone); a zsh PS1 from the environment (powerlevel10k) is not used (NSH-10).
 - 2026-11-11: a `PS1` with `\#` or `\!` (from the environment or the rc) no longer ends neosh with "not yet implemented"; they show as in bash, and a prompt that cannot be shown is drawn plain (NSH-72).
 - 2026-11-11: release v0.1.1 (plugins, rupa/z, aliases as in bash).
 - 2026-11-11: `plugins=(z)` installs rupa/z's own z in place of neosh's (NSH-69, NSH-70 struck), and an alias with a redirect, pipe or quote runs as in bash (NSH-71).

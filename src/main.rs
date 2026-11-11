@@ -4,7 +4,6 @@
 //! starting it follows brush-shell's entry. What neosh adds is the line
 //! reader around brush's own, which sends lines for navi to navi (NSH-4).
 
-mod aliases;
 mod away;
 mod bang;
 mod cd;
@@ -170,8 +169,10 @@ async fn run(args: Args) -> Result<u8, ShellError> {
     // handler, unlike an ignored signal, is not inherited across exec, so
     // children still get ^C as they expect.
     let _interrupts = if interactive { Some(tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?) } else { None };
-    // NSH-10: the directory and `$`, unless a PS1 came with the environment; the rc can set its own.
-    if interactive && std::env::var_os("PS1").is_none() {
+    // NSH-10: the directory and `$`, unless a bash PS1 came with the environment
+    // (a zsh one, as powerlevel10k exports, is not shown); the rc can set its own.
+    let inherited = std::env::var("PS1").ok().filter(|p| !prompt::is_zsh(p));
+    if interactive && inherited.is_none() {
         shell.lock().await.env_mut().set_global("PS1", brush_core::ShellVariable::new(prompt::DEFAULT_PS1))?;
     }
     // NSH-27: as long as bash's history, unless the environment says otherwise.
@@ -428,8 +429,6 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
             // NSH-33: zsh's precmd, the status left for the prompt; a PS1 it set counts.
             let mut composed = prompt.prompt.clone();
             if let Some(s) = guard.as_mut() {
-                // NSH-71: aliases brush would split wrong, as functions.
-                aliases::settle(s);
                 if hooks(s, "precmd", &[]) && s.env_str("PS1").as_deref() != Some(prompt::DEFAULT_PS1) {
                     // NSH-72: `\#` and `\!` put in, as bash does.
                     let saved = brush_interactive::numbers::put(s);

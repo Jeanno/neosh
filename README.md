@@ -107,6 +107,14 @@ cargo test
 This includes end-to-end tests that drive neosh on a pseudo-terminal
 (`tests/drive.py`, which needs python3) with a stand-in navi.
 
+### brush
+
+neosh builds against its fork of brush, [Jeanno/brush](https://github.com/Jeanno/brush),
+branch `neosh`: brush-core 0.5.0 with the fixes neosh needs to its engine, one
+commit each (`[patch.crates-io]` in `Cargo.toml`). To move to a newer brush,
+rebase that branch onto the new release tag, then update both brush entries.
+A fix that neosh can make from outside brush stays in neosh.
+
 ### Cutting a release
 
 Set `version` in `Cargo.toml` (and run `cargo build` so `Cargo.lock`

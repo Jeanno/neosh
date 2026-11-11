@@ -362,7 +362,9 @@ navi where it is; navi reads it only when the question needs it.
 ## The prompt
 
 - NSH-10: The prompt is the directory, `~` for home, and `$` (`#` as root),
-  unless `PS1` came with the environment or `~/.neoshrc` sets one.
+  unless `PS1` came with the environment or `~/.neoshrc` sets one. A `PS1`
+  from the environment that is zsh's (its `%` escapes, or a prompt such as
+  powerlevel10k's that calls zsh functions) is not used: bash cannot show it.
 - NSH-72: A prompt (`PS0`, `PS1`, `PS2`) shows `\#` as this command's number
   and `\!` as its history number, as bash does; brush has neither. A
   prompt that still cannot be shown is said once, in a line naming it,
@@ -425,15 +427,12 @@ navi where it is; navi reads it only when the question needs it.
   the best match. A short name not known says so (NSH-68), naming the
   ones that are.
 - NSH-70: (Struck: z built into neosh; it is rupa/z's own, NSH-69.)
-- NSH-71: An alias runs as bash runs it, even where brush would not:
-  brush splits an alias's text at spaces and parses none of it, so a
-  redirect, pipe, quote or `;` in it would be a word given to the
-  command. Before each prompt, each such alias becomes a function of the
-  same name that runs the text with the words after it (`alias z='_z
-  2>&1'` is `z() { _z 2>&1 "$@"; }`); an alias that starts with its own
-  name calls the command (`command grep …`). One of plain words stays an
-  alias. Once a function, `alias` no longer lists it and `type` says it
-  is a function.
+- NSH-71: An alias runs as bash runs it: its text is put in place of the
+  word before the line is parsed, so a redirect, pipe, quote or `;` in it
+  works (`alias z='_z 2>&1'`), only an unquoted word where a command goes
+  is one, and an alias defined on a line counts from the next command.
+  `alias` and `type` show it as an alias. (Fixed in brush, in neosh's fork;
+  brush split an alias's text at spaces.)
 
 ## Open
 

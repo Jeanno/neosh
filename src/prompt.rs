@@ -6,6 +6,25 @@ use std::path::{Path, PathBuf};
 /// The PS1 neosh sets; while it is still the shell's, neosh draws the prompt itself.
 pub const DEFAULT_PS1: &str = r"\w \$ ";
 
+/// NSH-10: whether a PS1 is zsh's, as one exported by a zsh prompt (powerlevel10k,
+/// oh-my-zsh): zsh's `%` escapes or its prompt functions, which bash cannot show.
+pub fn is_zsh(ps1: &str) -> bool {
+    if ["_p9k", "${(", "$+functions", "%{", "%F{", "%K{", "%B", "%b"].iter().any(|m| ps1.contains(m)) {
+        return true;
+    }
+    let mut chars = ps1.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '%' {
+            if let Some(n) = chars.peek() {
+                if "~nmMdcC/#?(jlTt*D@hiLx!".contains(*n) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 /// What the prompt shows.
 pub struct Parts<'a> {
     pub dir: &'a Path,
@@ -120,6 +139,16 @@ pub fn changed(git: &Path, dir: &Path, wait: std::time::Duration) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // NSH-10
+    #[test]
+    fn a_ps1_from_zsh_is_told_from_bash_s() {
+        assert!(is_zsh("${${_p9k_on_expand()}}%F{blue}%~%f "));
+        assert!(is_zsh("%n@%m %~ %# "));
+        assert!(!is_zsh(r"\u@\h \w \$ "));
+        assert!(!is_zsh(r"[\#] \$ "));
+        assert!(!is_zsh("100% \\$ "));
+    }
 
     fn parts(dir: &Path) -> Parts<'_> {
         Parts { dir, home: Some(Path::new("/home/u")), branch: None, changed: false, status: 0, took: None, root: false, color: false }
