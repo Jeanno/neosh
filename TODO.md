@@ -5,17 +5,10 @@ Newest asks first. Done items move to the log at the bottom.
 
 ## Now
 
-- Run the judge eval (neoai TL-46) on Darkbloom once it answers; it was at
-  capacity (429) for the first run. Then decide whether it should judge.
-
 ## Next
 
 - A job started with `&` has no pid in brush (`[1]+ <pid unknown>`), so `fg` cannot hand it the terminal and ^C does not stop it; `bg` says nothing (brush, NSH-3).
 - Where the "? to ask why" hint sits.
-- navi's example commands with placeholders (`your-command-here`) get typed at the prompt; only a runnable command should be.
-- navi offered the output of a command (`Mon Nov  9 …`) as the command to type; with the placeholder item above, only a runnable command should be (neoai).
-- navi's write tool takes `~/x` literally, making a `~` directory; the model then guessed a home from the path (neoai).
-- Tool calls with no words yet (most `browser_*`): give them some.
 
 ## Waiting on the owner
 
@@ -28,6 +21,8 @@ Newest asks first. Done items move to the log at the bottom.
 - Low priority (deprioritized 2026-11-09): a Raycast release tag (neoai `raycast-v*`).
 
 ## Done
+- 2026-11-10: navi hands neosh only a command that runs as it stands, never a placeholder or a command's output (neoai CLI-60); `~` is home in navi's file tools (TL-48); every tool call is said in words (CLI-61).
+- 2026-11-10: the judge eval on Darkbloom (Qwen3.8 27B, 3 runs): 91%, no unsafe approval, 9 needless asks, about 1.6s a verdict; good enough to judge when it is the model.
 
 - 2026-11-10: a prebuilt release: `release.yml` builds macOS and Linux tarballs on a `v*` tag; piped from curl, `install.sh` installs the latest one after checking its sha256, and builds from source with none or `--source` (NSH-64, NSH-65).
 - 2026-11-10: no `[1]+ Done` after ^C on a job brought back with `fg`, as in bash (NSH-63).
