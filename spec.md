@@ -54,11 +54,9 @@ hands a line to another shell. What neosh adds is below.
 ## Setup
 
 - NSH-47: Setup gets neosh ready in the terminal, a step at a time, each one
-  skippable: what to copy from zsh, when there is a zsh setup (NSH-79),
-  then how the prompt looks, the prompt being most of what a
+  skippable: how the prompt looks first, the prompt being most of what a
   shell looks like, then plugins (NSH-78), the model navi answers
-  with, then the login shell (NSH-80). As zsh's
-  first-run setup does, it is offered when an interactive neosh starts with
+  with, then the login shell (NSH-80). It is offered when an interactive neosh starts with
   no `~/.neoshrc` (and no `--norc`): yes runs it, later asks again next
   time, never writes a `~/.neoshrc` holding only a comment, so it is not
   asked again. `neosh --setup` runs it any time, and run again it changes
@@ -69,19 +67,7 @@ hands a line to another shell. What neosh adds is below.
   when it is done. With no `navi` on `$PATH` it says navi is what answers
   `?` and how to install it, and goes on.
 - NSH-49: The look step offers starship (the default, NSH-77), neosh's
-  own look, or your zsh's. For zsh's, neosh asks zsh for its prompt and colours as your zsh
-  starts (reading `~/.zshrc`, with no terminal, at most 5 seconds):
-  - starship in zsh gives `eval "$(starship init bash)"`, the same prompt;
-  - a `PROMPT` of zsh's escapes is written as bash's `PS1`: `%n` `%m` `%M`
-    `%~` `%d` `%/` `%c` `%.` `%1~` `%#` `%?` `%j` `%h` `%!` `%l` `%T` `%t`
-    `%@` `%*` `%D` `%D{…}` `%%` `%)`, colours and styles (`%F{…}` `%f`
-    `%K{…}` `%k` `%B` `%b` `%U` `%u` `%S` `%s`, by name, number or
-    `#rrggbb`) and `%{…%}`; `RPROMPT` is left out, bash having no right
-    prompt, and said so;
-  - a prompt it cannot write as bash's (one that runs commands or
-    functions, `%(…)` conditions, or a theme: oh-my-zsh's, powerlevel10k)
-    is named, with why, and neosh's own prompt is kept, which shows the
-    branch and a failed status as most themes do;
+  own look, or neosh's with the parts you pick (NSH-74).
 - NSH-50: What setup would write is shown first and written only on yes,
   into `~/.neoshrc` between `# >>> neosh setup >>>` and
   `# <<< neosh setup <<<`, replacing what an earlier setup wrote there and
@@ -97,11 +83,11 @@ hands a line to another shell. What neosh adds is below.
   that answers `?`, and the login shell) and asks once: yes goes straight to the first step,
   with no second question; leaving navi's setup with no model, navi says
   so (SET-29). Each step is
-  headed `Step N of 4` (5 with NSH-79's) in bold, with hints dim (plain without a terminal or
+  headed `Step N of 4` in bold, with hints dim (plain without a terminal or
   with `NO_COLOR`). At the end it says neosh is ready and shows how to
   begin: `?what's in this folder`, `?` for navi mode, `neosh --setup` to
   change it.
-- NSH-51: `neosh --setup --look zsh` or `--look neosh` makes the look choice
+- NSH-51: `neosh --setup --look starship` or `--look neosh` makes the look choice
   and skips the plugin and model steps, keeping the plugins an earlier
   setup chose; with `--yes` it also writes without asking, so
   it runs without a terminal.
@@ -164,32 +150,33 @@ hands a line to another shell. What neosh adds is below.
   it starts from what an earlier setup chose. `--setup --plugins '<names>'`
   chooses them without questions (`''` for none); a name neosh does not
   know says so, naming those it knows, and exits 2.
-- NSH-79: With a zsh setup (`.zshrc`, `.zprofile`, `.zshenv` or `.zlogin`
-  in `$ZDOTDIR` or home), setup's first step is `From your zsh`: it asks a
-  login zsh (from the system's `PATH`, as NSH-49 asks for its look) what
-  can be copied, shows it, and asks once, `Copy these from your zsh?
-  [Y/n]`. It copies:
-  - the folders zsh puts on `PATH`, so a neosh started as a login shell
-    (which reads `/etc/profile` and `~/.profile`, not zsh's files) finds
-    what zsh finds, navi in `~/.local/bin` among them: each that is there
-    and is not one of the system's (`/etc/paths`, `/etc/paths.d`), added
-    only when `PATH` does not have it already, so a neosh started from
-    another has it once;
-  - `CLICOLOR`, `LSCOLORS` and `LS_COLORS`, so `ls` is coloured as in zsh.
-  They go first in the setup block. With nothing to copy the step is left
-  out; the steps are numbered with it (`Step 1 of 5`) or without it.
-  Without questions (`--look … --yes`) they are copied.
+- NSH-79: (Struck: copying zsh's PATH and colours; NSH-81 finds neosh and navi.)
 - NSH-80: Setup's last step, and the installer's last question, is whether
   neosh is your login shell: the system's (`dscl` on macOS, `getent`
   elsewhere), not `$SHELL`, which apps keep from when they started. When
   it already is, that is said and nothing asked. Otherwise `[y/N]`, no
   unless yes: yes adds neosh's path to `/etc/shells` when it is not there
-  (`sudo tee -a`, which asks for the password) and runs `chsh -s`, then
-  says that apps already open keep their shell until you log out and back
-  in; if either fails it says the commands to run. No says how to do it
+  (`sudo tee -a`, which asks for the password) and runs `chsh -s`; if
+  either fails it says the commands to run. On macOS, apps are handed
+  `SHELL` as the login shell was at login, and terminals such as Ghostty
+  start `$SHELL`: so then, and when neosh already is the login shell,
+  `launchctl setenv SHELL <neosh>` tells launchd, and it is said that new
+  Terminal windows start neosh and an app already open does once quit
+  (⌘Q) and opened again. No says how to do it
   later. The installer asks on the terminal even when piped from curl,
   and without one does not ask; `NEOSH_LOGIN_SHELL=yes` or `no` answers
   it.
+- NSH-81: A login or interactive neosh puts its own folder on `PATH`, at
+  the end, when `PATH` lacks it, before setup or any startup file, so
+  `neosh`, and navi installed beside it (NSH-61), are found in a terminal
+  that starts neosh with the system's `PATH` and no startup file of yours.
+  A script's or `-c`'s `PATH`, not a login shell's, is left as given.
+- NSH-82: In a terminal, neosh looks as itself whatever the system's
+  startup files do: the prompt macOS's `/etc/bashrc` sets (`\h:\W \u\$ `,
+  read by `/etc/profile` for any shell with `$BASH`) is replaced by
+  neosh's own, unless the environment brought a `PS1`; and the first prompt
+  shows no failed status from the startup files (`/etc/bashrc` ends on a
+  failed test in any terminal but Terminal.app).
 
 ## The language
 

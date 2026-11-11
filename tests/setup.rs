@@ -54,50 +54,13 @@ impl Drop for Home {
     }
 }
 
-// NSH-49 to NSH-51
-#[test]
-fn zsh_s_look_is_written_between_markers_and_written_again_in_place() {
-    if !std::path::Path::new("/bin/zsh").exists() {
-        return;
-    }
-    let home = Home::new("zsh");
-    std::fs::write(home.0.join(".zshrc"), "echo hello from zshrc\nPROMPT='%F{green}%n@%m%f %~ %# '\n").unwrap();
-    std::fs::write(home.0.join(".neoshrc"), "alias ll='ls -l'\n").unwrap();
-    let out = home.neosh(&["--setup", "--look", "zsh", "--yes"]);
-    assert!(out.status.success(), "{out:?}");
-    assert_eq!(
-        home.rc(),
-        "alias ll='ls -l'\n\n# >>> neosh setup >>>\nPS1='\\[\\e[32m\\]\\u@\\h\\[\\e[39m\\] \\w \\$ '\n# <<< neosh setup <<<\n"
-    );
-    // Again with nothing new: nothing changes.
-    let out = home.neosh(&["--setup", "--look", "zsh", "--yes"]);
-    assert!(String::from_utf8_lossy(&out.stdout).contains("already has this look"), "{out:?}");
-    // neosh's own look takes setup's lines out, keeps only the choice, and leaves the rest.
-    assert!(home.neosh(&["--setup", "--look", "neosh", "--yes"]).status.success());
-    assert_eq!(home.rc(), "alias ll='ls -l'\n\n# >>> neosh setup >>>\n# neosh's own look; `neosh --setup` changes it.\n# <<< neosh setup <<<\n");
-}
-
-// NSH-49
-#[test]
-fn a_prompt_bash_cannot_draw_keeps_neosh_s_own() {
-    if !std::path::Path::new("/bin/zsh").exists() {
-        return;
-    }
-    let home = Home::new("subst");
-    std::fs::write(home.0.join(".zshrc"), "setopt prompt_subst\nPROMPT='$(date) %~ '\n").unwrap();
-    let out = home.neosh(&["--setup", "--look", "zsh", "--yes"]);
-    let said = String::from_utf8_lossy(&out.stdout);
-    assert!(said.contains("runs commands") && said.contains("neosh's own prompt is kept"), "{said}");
-    assert!(!home.rc().contains("PS1"), "{}", home.rc());
-}
-
 // NSH-47, NSH-51
 #[test]
 fn setup_without_a_terminal_needs_every_choice() {
     let home = Home::new("noterm");
     let out = home.neosh(&["--setup"]);
     assert_eq!(out.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&out.stderr).contains("--look zsh|neosh|starship (or --prompt '<parts>') and --yes"), "{out:?}");
+    assert!(String::from_utf8_lossy(&out.stderr).contains("--look starship|neosh (or --prompt '<parts>') and --yes"), "{out:?}");
     assert_eq!(home.neosh(&["--setup", "--look", "fish"]).status.code(), Some(2));
     assert!(!home.0.join(".neoshrc").exists());
 }
@@ -181,25 +144,14 @@ fn plugins_are_chosen_without_questions_and_kept_when_not_asked() {
     assert!(!home.rc().contains("plugins=(z)"), "{}", home.rc());
 }
 
-// NSH-79: a login neosh gets the folders zsh puts on PATH, each once.
+// NSH-81: a login neosh finds neosh (and navi beside it) with no startup file.
 #[test]
-fn the_folders_zsh_adds_to_path_are_written_for_neosh() {
-    if !std::path::Path::new("/bin/zsh").exists() {
-        return;
-    }
-    let home = Home::new("zshpath");
-    std::fs::create_dir_all(home.0.join("tools/bin")).unwrap();
-    std::fs::write(home.0.join("tools/bin/mytool"), "#!/bin/sh\necho mytool-ran\n").unwrap();
-    let mut perms = std::fs::metadata(home.0.join("tools/bin/mytool")).unwrap().permissions();
-    std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o755);
-    std::fs::set_permissions(home.0.join("tools/bin/mytool"), perms).unwrap();
-    std::fs::write(home.0.join(".zprofile"), "path+=($HOME/tools/bin /not/there)\n").unwrap();
-    let out = home.neosh(&["--setup", "--look", "neosh", "--yes"]);
-    assert!(out.status.success(), "{out:?}");
-    let rc = home.rc();
-    assert!(rc.contains("for d in \"$HOME\"'/tools/bin'; do"), "{rc}");
-    assert!(!rc.contains("/not/there"), "{rc}");
-    // Read twice, as a nested neosh would: on PATH once, and it runs.
-    let run = home.neosh(&["-c", "source ~/.neoshrc; source ~/.neoshrc; mytool; echo \"$PATH\" | tr : '\\n' | grep -c tools/bin"]);
-    assert_eq!(String::from_utf8_lossy(&run.stdout), "mytool-ran\n1\n", "{run:?}");
+fn a_login_neosh_has_its_own_folder_on_path() {
+    let home = Home::new("ownpath");
+    let me = std::path::Path::new(env!("CARGO_BIN_EXE_neosh")).canonicalize().unwrap();
+    let out = home.neosh(&["-l", "-c", "command -v neosh"]);
+    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), me.display().to_string(), "{out:?}");
+    // Not for a script: its PATH is the one it was given.
+    let out = home.neosh(&["-c", "command -v neosh || echo none"]);
+    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "none", "{out:?}");
 }

@@ -455,29 +455,6 @@ fn later_writes_nothing_and_asks_again() {
     assert!(!home.0.join(".neoshrc").exists());
 }
 
-// NSH-47 to NSH-50
-#[test]
-fn setup_at_first_start_runs_navi_s_and_copies_zsh_s_look_at_once() {
-    let home = Home::new("firstsetup");
-    std::fs::remove_file(home.0.join(".neoshrc")).unwrap();
-    std::fs::write(home.0.join(".zshrc"), "PROMPT='%n-zsh-look %# '\nRPROMPT='%T'\nexport LSCOLORS=Gxfxcxdxbxegedabagacad\n").unwrap();
-    let zdotdir = home.0.display().to_string();
-    // Copy from zsh, zsh's look, no z, write it, not the login shell.
-    let screen = home.run(&["y", "y", "4", "n", "y", "", "echo $LSCOLORS", "exit"], &[("ZDOTDIR", &zdotdir)]);
-    // NSH-79: a zsh setup is offered first.
-    assert!(screen.contains("Step 1 of 5 · From your zsh"), "{screen}");
-    assert!(screen.contains("ls colours") && screen.contains("Copy these from your zsh? [Y/n]"), "{screen}");
-    assert!(screen.find("From your zsh") < screen.find("Step 2 of 5 · How the prompt looks"), "{screen}");
-    assert!(home.log().contains("ARGS: setup"), "{}", home.log());
-    assert!(screen.contains("RPROMPT"), "{screen}");
-    let rc = std::fs::read_to_string(home.0.join(".neoshrc")).unwrap();
-    assert!(rc.contains("PS1='\\u-zsh-look \\$ '"), "{rc}");
-    assert!(rc.contains("export LSCOLORS='Gxfxcxdxbxegedabagacad'"), "{rc}");
-    // It counts at once: the prompt is zsh's, and the colours are there.
-    assert!(screen.contains("-zsh-look $ echo"), "{screen}");
-    assert!(screen.contains("\nGxfxcxdxbxegedabagacad"), "{screen}");
-}
-
 // NSH-73, NSH-74
 #[test]
 fn setup_picks_the_prompt_s_parts_with_it_shown_as_they_change() {
@@ -715,6 +692,7 @@ fn setup_makes_neosh_the_login_shell_on_yes() {
     for (name, body) in [
         ("sudo", "#!/bin/sh\necho \"SUDO: $* <$(cat)>\" >> \"$HOME/navi.log\"\n"),
         ("chsh", "#!/bin/sh\necho \"CHSH: $*\" >> \"$HOME/navi.log\"\n"),
+        ("launchctl", "#!/bin/sh\necho \"LAUNCHCTL: $*\" >> \"$HOME/navi.log\"\n"),
     ] {
         let path = home.0.join("bin").join(name);
         std::fs::write(&path, body).unwrap();
@@ -728,4 +706,20 @@ fn setup_makes_neosh_the_login_shell_on_yes() {
     assert!(log.contains(&format!("SUDO: tee -a /etc/shells <{me}>")), "{log}");
     assert!(log.contains(&format!("CHSH: -s {me}")), "{log}");
     assert!(screen.contains("neosh is your login shell."), "{screen}");
+    // On macOS, apps opened from now on are handed neosh as SHELL.
+    if cfg!(target_os = "macos") {
+        assert!(log.contains(&format!("LAUNCHCTL: setenv SHELL {me}")), "{log}");
+        assert!(screen.contains("quit it (⌘Q) and open it again"), "{screen}");
+    }
+}
+
+// NSH-82: macOS's /etc/bashrc prompt is not neosh's, and the startup files'
+// status is not shown at the first prompt.
+#[test]
+fn the_system_s_prompt_and_startup_status_are_not_shown() {
+    let home = Home::new("systemps1");
+    std::fs::write(home.0.join(".neoshrc"), "PS1='\\h:\\W \\u\\$ '\n[ -r /no/such/bashrc_ghostty ] && . /no/such/bashrc_ghostty\n").unwrap();
+    let screen = home.run(&["echo hi", "exit"], &[]);
+    assert!(screen.contains("work $ echo hi"), "{screen}");
+    assert!(!screen.contains("work 1 $"), "{screen}");
 }

@@ -28,7 +28,7 @@ use brush_interactive::{InputBackend, InteractivePrompt, ReadResult, ShellError,
 
 const USAGE: &str = "\
 usage: neosh [-l] [--norc] [-c '<commands>' [name [args…]] | <script> [args…]]
-       neosh --setup [--look starship|neosh|zsh | --prompt '<parts>'] [--plugins '<names>'] [--yes]
+       neosh --setup [--look starship|neosh | --prompt '<parts>'] [--plugins '<names>'] [--yes]
 
 neosh is a bash-compatible shell with navi inside: start a line with ? to
 ask navi, or write a sentence that is not a command.
@@ -37,7 +37,7 @@ ask navi, or write a sentence that is not a command.
   -l, --login  read ~/.profile first, as a login shell does
   --norc       do not read ~/.neoshrc
   --setup      choose the prompt's look (starship, neosh's own, your pick of
-               its parts, or zsh's), plugins (z), then navi's model
+               its parts), plugins (z), navi's model, the login shell
   --version    say which neosh this is";
 
 /// What the command line asked for (NSH-1).
@@ -111,6 +111,16 @@ fn main() {
             std::process::exit(2);
         }
     };
+    // NSH-81: a login or interactive neosh finds neosh, and navi installed
+    // beside it, though no startup file puts their folder on PATH; set
+    // first, so setup (NSH-47) and the recorder see it too.
+    if args.login || (args.command.is_none() && args.rest.is_empty() && std::io::stdin().is_terminal()) {
+        let own = std::env::current_exe().ok().and_then(|e| e.canonicalize().ok()).and_then(|e| e.parent().map(PathBuf::from));
+        if let Some(path) = own.and_then(|dir| with_dir(std::env::var_os("PATH"), &dir)) {
+            // SAFETY: before any thread is started.
+            unsafe { std::env::set_var("PATH", path) };
+        }
+    }
     // NSH-34: an interactive neosh runs inside its recorder.
     if args.command.is_none() && args.rest.is_empty() {
         if let Some(code) = record::wrap(&argv) {
@@ -186,9 +196,22 @@ async fn run(args: Args) -> Result<u8, ShellError> {
         }
     }
     shell.lock().await.load_config(&profile, &rc).await?;
+    // NSH-82: macOS's /etc/bashrc, which /etc/profile reads for any shell
+    // with $BASH, sets a prompt of its own; neosh's is kept.
+    if interactive && inherited.is_none() {
+        let mut s = shell.lock().await;
+        if s.env_str("PS1").as_deref() == Some(prompt::SYSTEM_PS1) {
+            s.env_mut().set_global("PS1", brush_core::ShellVariable::new(prompt::DEFAULT_PS1))?;
+        }
+    }
     // NSH-66: what `plugins=(…)` in the rc names, once the rc has run.
     if interactive && !args.norc {
         plugins::load(&mut *shell.lock().await).await;
+    }
+    // NSH-82: the first prompt shows no status of the startup files (macOS's
+    // /etc/bashrc ends on a failed test in any terminal but Terminal.app).
+    if interactive {
+        shell.lock().await.set_last_exit_status(0);
     }
 
     if let Some(command) = args.command {
@@ -816,6 +839,15 @@ fn hooks<SE: brush_core::ShellExtensions>(shell: &mut brush_core::Shell<SE>, nam
 }
 
 /// NSH-13: neosh's own history file, unless the environment names one.
+/// NSH-81: `PATH` with `dir` at its end, unless it is there already.
+fn with_dir(path: Option<std::ffi::OsString>, dir: &std::path::Path) -> Option<std::ffi::OsString> {
+    let path = path.unwrap_or_default();
+    if std::env::split_paths(&path).any(|p| p == dir) {
+        return None;
+    }
+    std::env::join_paths(std::env::split_paths(&path).filter(|p| !p.as_os_str().is_empty()).chain([dir.to_path_buf()])).ok()
+}
+
 fn history_file(inherited: Option<std::ffi::OsString>, home: Option<std::ffi::OsString>) -> Option<PathBuf> {
     match inherited {
         Some(_) => None,
@@ -903,6 +935,15 @@ fn is_command<SE: brush_core::ShellExtensions>(shell: &mut brush_core::Shell<SE>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // NSH-81
+    #[test]
+    fn neosh_s_own_folder_goes_on_path_once() {
+        let dir = std::path::Path::new("/h/.local/bin");
+        assert_eq!(with_dir(Some("/usr/bin:/bin".into()), dir), Some("/usr/bin:/bin:/h/.local/bin".into()));
+        assert_eq!(with_dir(Some("/h/.local/bin:/bin".into()), dir), None);
+        assert_eq!(with_dir(None, dir), Some("/h/.local/bin".into()));
+    }
 
     // NSH-54
     #[test]

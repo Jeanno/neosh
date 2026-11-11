@@ -176,8 +176,17 @@ later() {
 }
 current=$(dscl . -read "/Users/${USER:-$(id -un)}" UserShell 2>/dev/null | awk '{print $2}') || current=
 [ -n "$current" ] || current=$(getent passwd "${USER:-$(id -un)}" 2>/dev/null | cut -d: -f7) || current=
+# Apps on macOS are handed SHELL as it was at login; launchd is told the new one.
+tell_apps() {
+  if [ "$(uname -s)" = Darwin ] && launchctl setenv SHELL "$target" 2>/dev/null; then
+    say "New Terminal windows start neosh. An app already open (Ghostty, iTerm) does once you quit it (Cmd-Q) and open it again."
+  else
+    say "New terminal windows start neosh; apps already open may keep their shell until you log out and back in."
+  fi
+}
 if [ "$current" = "$target" ]; then
   say "neosh is already your login shell."
+  tell_apps
 else
   answer=${NEOSH_LOGIN_SHELL:-}
   if [ -z "$answer" ] && { : </dev/tty; } 2>/dev/null; then
@@ -188,7 +197,8 @@ else
     y | Y | yes)
       if grep -qxF "$target" /etc/shells || echo "$target" | sudo tee -a /etc/shells >/dev/null; then
         if chsh -s "$target"; then
-          say "neosh is your login shell. Apps already open keep theirs until you log out and back in."
+          say "neosh is your login shell."
+          tell_apps
         else
           later
         fi

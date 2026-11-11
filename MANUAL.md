@@ -55,22 +55,11 @@ navi's manual, `navi setup` and `navi usage`. This manual covers the shell.
   Yes runs it, "later" asks again next time, and "never" stops asking.
 - `neosh --setup` runs it any time; run again, it changes what it set. (`neosh setup`
   without dashes runs a script named `setup`, as bash would.)
-- First, if you use zsh: "From your zsh" lists what it can copy and asks once. That is the
-  folders your zsh adds to `PATH` (from `~/.zprofile`, `~/.zshrc`), so neosh as your login
-  shell finds the same commands, navi included; and `CLICOLOR`, `LSCOLORS`, `LS_COLORS`, so
-  `ls` looks the same. With this step there are five, not four.
-- Step 1 of 4, the look: starship (the default), neosh's own prompt, your own pick of
-  its parts, or your zsh's.
+- Step 1 of 4, the look: starship (the default), neosh's own prompt, or your own pick of
+  its parts.
   - Choosing starship with none installed installs it: `brew install starship`, or with no
     Homebrew, starship's installer into `~/.local/bin`. If that fails, setup says how to
     install it and uses neosh's own prompt.
-  - For zsh's, neosh asks zsh for its prompt and colours (reading `~/.zshrc`, at most
-    5 seconds).
-  - starship in zsh becomes `eval "$(starship init bash)"`, the same prompt.
-  - A zsh `PROMPT` made of zsh's `%` escapes and colours is written as bash's `PS1`.
-    `RPROMPT` is left out (bash has no right prompt), and setup says so.
-  - A prompt that runs commands or functions, uses `%(…)` conditions, or comes from a theme
-    (oh-my-zsh, powerlevel10k) cannot be copied; setup says why and keeps neosh's prompt.
 - Step 2 of 4, plugins: offers each plugin neosh knows by name (today `z`), yes by
   default, written as `plugins=(z)`. If your `~/.neoshrc` names plugins itself, outside
   the markers, setup leaves them alone.
@@ -84,7 +73,7 @@ navi's manual, `navi setup` and `navi usage`. This manual covers the shell.
   the markers freely.
 - Changes count from the next neosh, or after `source ~/.neoshrc`.
 - Without a terminal, `neosh --setup` says so and exits 1, unless every choice is given:
-  `neosh --setup --look zsh --yes` (or `--look neosh`, `--look starship`) makes the look
+  `neosh --setup --look neosh --yes` (or `--look starship`) makes the look
   choice, skips the plugin and model steps (keeping plugins an earlier setup chose), and
   writes without asking. `--plugins 'z'` (or `''` for none) chooses the plugins.
 
@@ -319,18 +308,19 @@ yourself (it asks for your password):
     echo ~/.local/bin/neosh | sudo tee -a /etc/shells && chsh -s ~/.local/bin/neosh
 
 (Use the full path where neosh is installed.) As a login shell, neosh reads `/etc/profile`
-and `~/.profile` first, not zsh's `~/.zprofile` or `~/.zshrc`; `neosh --setup` copies the
-`PATH` folders zsh adds, so run it (again) after switching.
+and `~/.profile` first. It always finds itself and navi, which are installed in the same
+folder, even when nothing puts that folder on `PATH`. Folders your old shell added to `PATH`
+(in `~/.zprofile` or `~/.zshrc`, say) go in `~/.neoshrc`: `export PATH="$PATH:$HOME/bin"`.
 
-A terminal that is already open keeps starting the shell it started with: macOS gives apps
-the new login shell after you log out and back in. (Ghostty, iTerm and others can also be
-told to run neosh in their own settings.)
+New Terminal windows start neosh straight away. Ghostty, iTerm and other apps start the
+shell macOS gave them when they opened, so quit one (⌘Q) and open it again. Setup and the
+installer tell macOS about the new shell (`launchctl setenv SHELL …`) so this works without
+logging out; if an app still starts your old shell, log out and back in.
 
 ## Troubleshooting and common questions
 
 **`?` says navi is not installed.** Install navi and make sure `navi` is on your `$PATH`.
-The line runs nothing and its status is 127. Found from zsh but not from a login neosh?
-Run `neosh --setup`, which copies zsh's `PATH` folders.
+The line runs nothing and its status is 127.
 
 **navi has no model / nothing answers.** Run `navi setup` (or `neosh --setup`, whose last
 step runs it).
@@ -350,10 +340,6 @@ stays the shell's.
 `NEOSH_RECORD=off`. Lines for navi themselves are sent to navi.
 
 **How do I stop the `? to ask why` hint?** `NEOSH_HINT=off`.
-
-**My zsh prompt wasn't copied.** Themes and prompts that run commands can't be translated;
-neosh keeps its own prompt, which shows the branch and failed status. Set `PS1` in
-`~/.neoshrc` yourself, or use starship.
 
 **Continue an earlier conversation.** `?/resume`.
 

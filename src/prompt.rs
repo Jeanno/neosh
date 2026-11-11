@@ -6,6 +6,9 @@ use std::path::{Path, PathBuf};
 /// The PS1 neosh sets; while it is still the shell's, neosh draws the prompt itself.
 pub const DEFAULT_PS1: &str = r"\w \$ ";
 
+/// NSH-82: the prompt macOS's `/etc/bashrc` sets, which is not yours.
+pub const SYSTEM_PS1: &str = r"\h:\W \u\$ ";
+
 /// NSH-10: whether a PS1 is zsh's, as one exported by a zsh prompt (powerlevel10k,
 /// oh-my-zsh): zsh's `%` escapes or its prompt functions, which bash cannot show.
 pub fn is_zsh(ps1: &str) -> bool {

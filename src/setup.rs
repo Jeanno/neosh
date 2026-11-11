@@ -1,11 +1,10 @@
-//! Setup (NSH-47 to NSH-51): how the prompt looks, plugins, then the model
-//! navi answers with, in the terminal, written to `~/.neoshrc` between markers as zsh's
-//! first-run setup writes `~/.zshrc`.
+//! Setup (NSH-47 to NSH-51): how the prompt looks, plugins, the model navi
+//! answers with, and the login shell, in the terminal, written to
+//! `~/.neoshrc` between markers.
 
 use std::io::{BufRead as _, IsTerminal as _, Write as _};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
 
 pub const BEGIN: &str = "# >>> neosh setup >>>";
 pub const END: &str = "# <<< neosh setup <<<";
@@ -16,7 +15,6 @@ const INSTALL_NAVI: &str = "curl -fsSL https://raw.githubusercontent.com/Jeanno/
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Look {
     Neosh,
-    Zsh,
     /// NSH-77: starship's prompt.
     Starship,
 }
@@ -50,10 +48,9 @@ pub fn parse(args: &[String]) -> Result<Options, String> {
             "--yes" | "-y" => options.yes = true,
             "--look" => {
                 options.look = Some(match args.next().map(String::as_str) {
-                    Some("zsh") => Look::Zsh,
                     Some("neosh") => Look::Neosh,
                     Some("starship") => Look::Starship,
-                    other => return Err(format!("--look takes zsh, neosh or starship, not {}", other.unwrap_or("nothing"))),
+                    other => return Err(format!("--look takes starship or neosh, not {}", other.unwrap_or("nothing"))),
                 })
             }
             // NSH-75: neosh's own look, with these parts.
@@ -122,34 +119,17 @@ const OWN_LOOK: &str = "# neosh's own look; `neosh --setup` changes it.";
 pub fn run(options: &Options, rc: &Path) -> i32 {
     let terminal = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
     if !terminal && !(options.look.is_some() && options.yes) {
-        eprintln!("neosh: --setup asks its questions on a terminal; without one, give --look zsh|neosh|starship (or --prompt '<parts>') and --yes");
+        eprintln!("neosh: --setup asks its questions on a terminal; without one, give --look starship|neosh (or --prompt '<parts>') and --yes");
         return 1;
     }
     // Every step is asked unless the look was given (NSH-51).
     let steps = options.look.is_none();
     let before = std::fs::read_to_string(rc).unwrap_or_default();
-    let home = std::env::var_os("HOME").map(PathBuf::from);
-    // NSH-79: zsh, asked once when there is a zsh setup, for its look and
-    // what can be copied from it.
-    let zsh = if find("zsh").is_some() && zsh_configured(home.as_deref()) {
-        ask_zsh()
-    } else {
-        Err("there is no zsh setup to copy a look from".to_string())
-    };
-    let (from_zsh, found) = zsh.as_ref().map(|z| zsh_config(z, home.as_deref())).unwrap_or_default();
-    let total = 4 + usize::from(steps && !from_zsh.is_empty());
+    let total = 4;
     let step = std::cell::Cell::new(0);
     let head = |title: &str| {
         step.set(step.get() + 1);
         println!("\n{}", bold(&format!("Step {} of {total} · {title}", step.get())));
-    };
-    // NSH-79: first, whether to copy what zsh sets up.
-    let copy = from_zsh.is_empty() || !steps || {
-        head("From your zsh");
-        for (what, detail) in &found {
-            println!("  {what:<10} {}", dim(detail));
-        }
-        yes_no("Copy these from your zsh? [Y/n] ", true)
     };
     // NSH-49: the look, starship's the default (NSH-77).
     if steps {
@@ -157,7 +137,6 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
         println!("  1  starship     {}", dim("themes and icons, drawn by starship"));
         println!("  2  neosh's own  {}", dim("the directory, git branch and a failed status"));
         println!("  3  my own       {}", dim("neosh's, with the parts and colours you pick"));
-        println!("  4  like my zsh  {}", dim("its prompt and colours"));
     }
     let mut parts = options.parts.clone();
     let mut colors = options.colors.clone();
@@ -170,7 +149,6 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
             parts = Some(picked);
             Look::Neosh
         }
-        "4" => Look::Zsh,
         _ => Look::Starship,
     });
     // NSH-77: starship, installed if need be, and the preset that becomes its config.
@@ -243,19 +221,7 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
             lines.push(STARSHIP_INIT.to_string());
             lines
         }
-        Look::Zsh => {
-            let (lines, notes) = zsh_look(&zsh);
-            for note in notes {
-                println!("{}", dim(&format!("· {note}")));
-            }
-            lines
-        }
     };
-    // NSH-79: what was copied from zsh, first, so what follows finds it.
-    if copy {
-        let at = usize::from(look == Look::Neosh && lines.first().is_some_and(|l| l == OWN_LOOK));
-        lines.splice(at..at, from_zsh);
-    }
     if let Some(names) = plugins.filter(|p| !p.is_empty()) {
         lines.push(format!("plugins=({})", names.join(" ")));
     }
@@ -382,6 +348,7 @@ fn login_step() {
     let same = |shell: &str| Path::new(shell).canonicalize().is_ok_and(|p| p == me);
     if login_shell().is_some_and(|s| same(&s)) {
         println!("{}", dim("· neosh is already your login shell."));
+        tell_apps(&me_str);
         return;
     }
     println!("  {}", dim(&format!("Terminals then start neosh ({}); it asks for your password.", tilde(&me))));
@@ -406,9 +373,22 @@ fn login_step() {
     }
     let ok = find("chsh").is_some_and(|chsh| Command::new(chsh).args(["-s", &me_str]).status().is_ok_and(|s| s.success()));
     if ok {
-        println!("{}", dim("· neosh is your login shell. Apps already open keep their shell until you log out and back in."));
+        println!("{}", dim("· neosh is your login shell."));
+        tell_apps(&me_str);
     } else {
         println!("chsh did not change it. To do it yourself:\n  chsh -s {me_str}");
+    }
+}
+
+/// NSH-80: apps opened from now on start neosh: on macOS they are handed
+/// `SHELL` as the login shell was at login, so launchd is told the new one.
+fn tell_apps(me: &str) {
+    let told = cfg!(target_os = "macos")
+        && find("launchctl").is_some_and(|l| Command::new(l).args(["setenv", "SHELL", me]).status().is_ok_and(|s| s.success()));
+    if told {
+        println!("{}", dim("· New Terminal windows start neosh. An app already open (Ghostty, iTerm) does once you quit it (⌘Q) and open it again."));
+    } else {
+        println!("{}", dim("· New terminal windows start neosh; apps already open may keep their shell until you log out and back in."));
     }
 }
 
@@ -693,289 +673,6 @@ pub fn with_block(rc: &str, lines: &[String]) -> String {
     out
 }
 
-/// What zsh says of itself, as your zsh starts.
-#[derive(Debug, Default, PartialEq, Eq)]
-pub struct Zsh {
-    pub prompt: String,
-    pub rprompt: String,
-    pub theme: String,
-    pub starship: bool,
-    pub p10k: bool,
-    pub prompt_subst: bool,
-    pub colors: Vec<(&'static str, String)>,
-    /// NSH-79: zsh's PATH, as a login zsh makes it.
-    pub path: String,
-}
-
-const SENTINEL: &str = "neosh-setup-look";
-const COLOR_VARS: [&str; 3] = ["CLICOLOR", "LSCOLORS", "LS_COLORS"];
-
-/// NSH-49: zsh's prompt and colours, asked of an interactive zsh with no terminal.
-fn ask_zsh() -> Result<Zsh, String> {
-    let zsh = find("zsh").ok_or("zsh is not installed, so there is no zsh look to copy")?;
-    let script = format!(
-        "print -rN -- {SENTINEL} \"$PROMPT\" \"$RPROMPT\" \"${{ZSH_THEME-}}\" \"${{+functions[starship_precmd]}}\" \"${{+functions[p10k]}}\" \"${{options[promptsubst]}}\" \"$PATH\" {}",
-        COLOR_VARS.iter().map(|v| format!("\"${{{v}-}}\"")).collect::<Vec<_>>().join(" ")
-    );
-    let mut child = Command::new(zsh)
-        // NSH-79: a login zsh, from the system's PATH, so the PATH it
-        // makes is its own and not the one setup was started with.
-        .args(["-l", "-i", "-c", &script])
-        .env("PATH", system_path().join(":"))
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| format!("zsh could not be started: {e}"))?;
-    let started = Instant::now();
-    while child.try_wait().map_err(|e| e.to_string())?.is_none() {
-        if started.elapsed() > Duration::from_secs(5) {
-            let _ = child.kill();
-            return Err("zsh took more than 5 seconds to start, so its look was not read".into());
-        }
-        std::thread::sleep(Duration::from_millis(20));
-    }
-    let out = child.wait_with_output().map_err(|e| e.to_string())?;
-    parse_zsh(&String::from_utf8_lossy(&out.stdout)).ok_or_else(|| "zsh did not say what its prompt is".into())
-}
-
-/// What `ask_zsh`'s script printed, after anything `~/.zshrc` printed first.
-pub fn parse_zsh(out: &str) -> Option<Zsh> {
-    let at = out.find(&format!("{SENTINEL}\0"))?;
-    let fields: Vec<&str> = out[at..].split('\0').skip(1).collect();
-    let field = |i: usize| fields.get(i).copied().unwrap_or("").to_string();
-    Some(Zsh {
-        prompt: field(0),
-        rprompt: field(1),
-        theme: field(2),
-        starship: field(3) == "1",
-        p10k: field(4) == "1",
-        prompt_subst: field(5) == "on",
-        path: field(6),
-        colors: COLOR_VARS.iter().enumerate().map(|(i, v)| (*v, field(7 + i))).filter(|(_, value)| !value.is_empty()).collect(),
-    })
-}
-
-/// NSH-49: the lines for `~/.neoshrc` and what to say about them.
-fn zsh_look(zsh: &Result<Zsh, String>) -> (Vec<String>, Vec<String>) {
-    match zsh {
-        Ok(zsh) => lines_for(zsh, find("starship").is_some()),
-        Err(why) => (Vec::new(), vec![format!("{why}; neosh's own look is kept.")]),
-    }
-}
-
-/// NSH-79: the PATH a login shell starts from: `/etc/paths` and
-/// `/etc/paths.d` (macOS's path_helper), else the usual folders.
-fn system_path() -> Vec<String> {
-    let mut dirs: Vec<String> = Vec::new();
-    let mut files = vec![PathBuf::from("/etc/paths")];
-    let mut more: Vec<PathBuf> = std::fs::read_dir("/etc/paths.d").into_iter().flatten().flatten().map(|e| e.path()).collect();
-    more.sort();
-    files.extend(more);
-    for file in files {
-        for line in std::fs::read_to_string(file).unwrap_or_default().lines().map(str::trim) {
-            if !line.is_empty() && !line.starts_with('#') && !dirs.iter().any(|d| d == line) {
-                dirs.push(line.to_string());
-            }
-        }
-    }
-    if dirs.is_empty() {
-        dirs = ["/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin"].map(String::from).to_vec();
-    }
-    dirs
-}
-
-/// NSH-79: the line that adds the folders zsh puts on PATH and a login
-/// neosh would not have, each once; `None` when there are none.
-pub fn path_line(zsh_path: &str, system: &[String], home: Option<&Path>, exists: impl Fn(&str) -> bool) -> Option<String> {
-    let mut dirs: Vec<String> = Vec::new();
-    for dir in zsh_path.split(':').filter(|d| d.starts_with('/')) {
-        if !system.iter().any(|s| s == dir) && !dirs.iter().any(|d| d == dir) && exists(dir) {
-            dirs.push(dir.to_string());
-        }
-    }
-    if dirs.is_empty() {
-        return None;
-    }
-    let home = home.map(|h| h.display().to_string());
-    let words: Vec<String> = dirs
-        .iter()
-        .map(|d| match home.as_deref().and_then(|h| d.strip_prefix(h)).filter(|r| r.starts_with('/')) {
-            Some(rest) => format!("\"$HOME\"{}", quote(rest)),
-            None => quote(d),
-        })
-        .collect();
-    Some(format!(
-        "for d in {}; do case \":$PATH:\" in *\":$d:\"*) ;; *) PATH=\"$PATH:$d\" ;; esac; done; export PATH",
-        words.join(" ")
-    ))
-}
-
-/// The lines and notes for what zsh said; `starship` is whether neosh can run it.
-pub fn lines_for(zsh: &Zsh, starship: bool) -> (Vec<String>, Vec<String>) {
-    let mut lines = Vec::new();
-    let mut notes = Vec::new();
-    let keep = "neosh's own prompt is kept, which shows the git branch and a failed status";
-    if zsh.starship {
-        if starship {
-            lines.push(STARSHIP_INIT.to_string());
-            notes.push("zsh's prompt is starship's: neosh uses starship too, so it looks the same.".into());
-        } else {
-            notes.push(format!("zsh's prompt is starship's, but starship is not on neosh's PATH; {keep}."));
-        }
-    } else if zsh.p10k {
-        notes.push(format!("zsh's prompt is powerlevel10k's, which only zsh can draw; {keep}."));
-    } else {
-        match translate(&zsh.prompt, zsh.prompt_subst) {
-            Ok((ps1, approximations)) => {
-                lines.push(format!("PS1={}", quote(&ps1)));
-                notes.extend(approximations);
-                if !zsh.rprompt.is_empty() {
-                    notes.push("zsh's right-hand prompt (RPROMPT) is left out: bash has none.".into());
-                }
-            }
-            Err(why) => {
-                let theme = if zsh.theme.is_empty() { String::new() } else { format!(" (oh-my-zsh's {} theme)", zsh.theme) };
-                notes.push(format!("zsh's prompt{theme} {why}, which bash's prompt cannot do; {keep}."));
-            }
-        }
-    }
-    (lines, notes)
-}
-
-/// NSH-79: whether there is a zsh setup: its startup files in `$ZDOTDIR`
-/// or home.
-fn zsh_configured(home: Option<&Path>) -> bool {
-    let dir = std::env::var_os("ZDOTDIR").map(PathBuf::from).or_else(|| home.map(Path::to_path_buf));
-    dir.is_some_and(|d| [".zshrc", ".zprofile", ".zshenv", ".zlogin"].iter().any(|f| d.join(f).is_file()))
-}
-
-/// NSH-79: what setup copies from zsh, as lines for the block, and what
-/// they are, to show: the folders it adds to PATH, and ls's colours.
-pub fn zsh_config(zsh: &Zsh, home: Option<&Path>) -> (Vec<String>, Vec<(String, String)>) {
-    let mut lines = Vec::new();
-    let mut found = Vec::new();
-    let system = system_path();
-    if let Some(line) = path_line(&zsh.path, &system, home, |d| Path::new(d).is_dir()) {
-        let dirs: Vec<String> = zsh
-            .path
-            .split(':')
-            .filter(|d| d.starts_with('/') && !system.iter().any(|s| s == d) && Path::new(d).is_dir())
-            .map(|d| tilde(Path::new(d)))
-            .fold(Vec::new(), |mut v, d| {
-                if !v.contains(&d) {
-                    v.push(d);
-                }
-                v
-            });
-        let more = if dirs.len() > 3 { ", …" } else { "" };
-        let n = dirs.len();
-        found.push(("PATH".to_string(), format!("{n} folder{} zsh adds: {}{more}", if n == 1 { "" } else { "s" }, dirs[..n.min(3)].join(", "))));
-        lines.push(line);
-    }
-    if !zsh.colors.is_empty() {
-        let names: Vec<&str> = zsh.colors.iter().map(|(n, _)| *n).collect();
-        found.push(("ls colours".to_string(), names.join(" ")));
-        for (name, value) in &zsh.colors {
-            lines.push(format!("export {name}={}", quote(value)));
-        }
-    }
-    (lines, found)
-}
-
-/// NSH-49: a zsh `PROMPT` as bash's `PS1`, with what is only close; or why not.
-pub fn translate(prompt: &str, prompt_subst: bool) -> Result<(String, Vec<String>), String> {
-    let chars: Vec<char> = prompt.chars().collect();
-    let mut out = String::new();
-    let mut notes = Vec::new();
-    let mut i = 0;
-    let sgr = |code: &str| format!("\\[\\e[{code}m\\]");
-    while i < chars.len() {
-        let c = chars[i];
-        i += 1;
-        match c {
-            '$' | '`' if prompt_subst => return Err("runs commands or reads variables as it is drawn".into()),
-            '$' => out += "\\044",
-            '`' => out += "\\140",
-            '\\' => out += "\\\\",
-            '%' => {
-                let digits: String = chars[i..].iter().take_while(|c| c.is_ascii_digit()).collect();
-                i += digits.len();
-                let n: Option<u32> = digits.parse().ok();
-                let Some(&e) = chars.get(i) else {
-                    out.push('%');
-                    break;
-                };
-                i += 1;
-                // `{…}` after %F, %K and %D.
-                let mut braced = || -> Option<String> {
-                    (chars.get(i) == Some(&'{')).then(|| {
-                        let end = chars[i..].iter().position(|&c| c == '}').map_or(chars.len(), |p| i + p);
-                        let s: String = chars[i + 1..end].iter().collect();
-                        i = (end + 1).min(chars.len());
-                        s
-                    })
-                };
-                match e {
-                    'n' => out += "\\u",
-                    'm' => out += "\\h",
-                    'M' => out += "\\H",
-                    '~' | 'd' | '/' if n == Some(1) => out += "\\W",
-                    '~' => {
-                        if n.is_some_and(|n| n > 1) {
-                            notes.push(format!("%{digits}~ shows the whole path in bash, not the last {digits} parts."));
-                        }
-                        out += "\\w";
-                    }
-                    'd' | '/' => out += "${PWD}",
-                    'c' | '.' => out += "\\W",
-                    '#' => out += "\\$",
-                    '?' => out += "$?",
-                    'j' => out += "\\j",
-                    'h' | '!' => out += "\\!",
-                    'l' | 'y' => out += "\\l",
-                    'T' => out += "\\A",
-                    't' | '@' => out += "\\@",
-                    '*' => out += "\\t",
-                    'D' => out += &format!("\\D{{{}}}", braced().unwrap_or_else(|| "%y-%m-%d".into())),
-                    'w' => out += "\\D{%a %e}",
-                    'W' => out += "\\D{%m/%d/%y}",
-                    '%' => out.push('%'),
-                    ')' => out.push(')'),
-                    'F' | 'K' => {
-                        let fg = e == 'F';
-                        let color = braced().or_else(|| n.map(|n| n.to_string()));
-                        let code = match color {
-                            None => Ok(if fg { "39".to_string() } else { "49".to_string() }),
-                            Some(c) => crate::prompt::color_code(&c, fg),
-                        };
-                        out += &sgr(&code.map_err(|()| format!("names a colour bash does not know (%{e}{{…}})"))?);
-                    }
-                    'f' => out += &sgr("39"),
-                    'k' => out += &sgr("49"),
-                    'B' => out += &sgr("1"),
-                    'b' => out += &sgr("22"),
-                    'U' => out += &sgr("4"),
-                    'u' => out += &sgr("24"),
-                    'S' => out += &sgr("7"),
-                    's' => out += &sgr("27"),
-                    'E' => out += "\\[\\e[K\\]",
-                    '{' => {
-                        let rest: String = chars[i..].iter().collect();
-                        let end = rest.find("%}").ok_or("has a %{ with no %}")?;
-                        out += &format!("\\[{}\\]", &rest[..end]);
-                        i += rest[..end].chars().count() + 2;
-                    }
-                    '(' => return Err("has a %(…) condition".into()),
-                    other => return Err(format!("uses %{other}")),
-                }
-            }
-            c => out.push(c),
-        }
-    }
-    Ok((out, notes))
-}
-
 /// `s` in single quotes for `~/.neoshrc`.
 fn quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
@@ -1011,46 +708,6 @@ fn tilde(path: &Path) -> String {
 mod tests {
     use super::*;
 
-    // NSH-49
-    #[test]
-    fn a_zsh_prompt_is_written_as_bash_s() {
-        let t = |p: &str| translate(p, false).map(|(ps1, _)| ps1);
-        assert_eq!(t("%n@%m %~ %# ").unwrap(), r"\u@\h \w \$ ");
-        assert_eq!(t("%F{green}%n%f:%1~%(").unwrap_err(), "has a %(…) condition");
-        assert_eq!(t("%F{green}%n%f:%1~ ").unwrap(), r"\[\e[32m\]\u\[\e[39m\]:\W ");
-        assert_eq!(t("%B%F{208}%c%f%b %K{#ff0000}x%k").unwrap(), r"\[\e[1m\]\[\e[38;5;208m\]\W\[\e[39m\]\[\e[22m\] \[\e[48;2;255;0;0m\]x\[\e[49m\]");
-        assert_eq!(t("%D{%H:%M} %* %T %? %% %d $ `x` \\").unwrap(), r"\D{%H:%M} \t \A $? % ${PWD} \044 \140x\140 \\");
-        assert_eq!(t("%{\x1b[1m%}>").unwrap(), "\\[\x1b[1m\\]>");
-        let (ps1, notes) = translate("%3~ ", false).unwrap();
-        assert_eq!(ps1, r"\w ");
-        assert_eq!(notes.len(), 1);
-        assert_eq!(translate("$(git_prompt_info) %~", true).unwrap_err(), "runs commands or reads variables as it is drawn");
-        assert_eq!(t("%v").unwrap_err(), "uses %v");
-    }
-
-    // NSH-49
-    #[test]
-    fn what_zsh_said_becomes_lines_and_notes() {
-        let zsh = parse_zsh(&format!("hello from zshrc\n{SENTINEL}\0%n %~ %# \0%T\0\00\00\0off\0/usr/bin:/h/bin\01\0Gxfx\0\0")).unwrap();
-        assert_eq!(zsh.prompt, "%n %~ %# ");
-        assert_eq!(zsh.path, "/usr/bin:/h/bin");
-        assert_eq!(zsh.colors, vec![("CLICOLOR", "1".to_string()), ("LSCOLORS", "Gxfx".to_string())]);
-        let (lines, notes) = lines_for(&zsh, false);
-        assert_eq!(lines, vec![r"PS1='\u \w \$ '"]);
-        // NSH-79: ls's colours are copied from zsh, not part of the look.
-        let (copied, found) = zsh_config(&zsh, None);
-        assert_eq!(copied, vec!["export CLICOLOR='1'", "export LSCOLORS='Gxfx'"]);
-        assert_eq!(found, vec![("ls colours".to_string(), "CLICOLOR LSCOLORS".to_string())]);
-        assert!(notes[0].contains("RPROMPT"), "{notes:?}");
-        let starship = Zsh { starship: true, ..Zsh::default() };
-        assert_eq!(lines_for(&starship, true).0, vec![STARSHIP_INIT]);
-        assert!(lines_for(&starship, false).0.is_empty());
-        let omz = Zsh { prompt: "$(git_prompt_info)%~".into(), prompt_subst: true, theme: "robbyrussell".into(), ..Zsh::default() };
-        let (lines, notes) = lines_for(&omz, false);
-        assert!(lines.is_empty());
-        assert!(notes[0].contains("oh-my-zsh's robbyrussell theme") && notes[0].contains("neosh's own prompt is kept"), "{notes:?}");
-    }
-
     // NSH-50
     #[test]
     fn setup_s_block_is_replaced_and_nothing_else() {
@@ -1065,21 +722,11 @@ mod tests {
         assert_eq!(with_block(&format!("{BEGIN}\nx\n{END}\n"), &[]), "");
     }
 
-    // NSH-51
-    // NSH-79
-    #[test]
-    fn the_folders_zsh_adds_are_put_on_path_once() {
-        let system: Vec<String> = ["/usr/bin", "/bin"].map(String::from).to_vec();
-        let home = Path::new("/h");
-        let line = path_line("/usr/bin:/h/.local/bin:/bin:/opt/x y/bin:/h/.local/bin:/gone:rel", &system, Some(home), |d| d != "/gone").unwrap();
-        assert_eq!(line, "for d in \"$HOME\"'/.local/bin' '/opt/x y/bin'; do case \":$PATH:\" in *\":$d:\"*) ;; *) PATH=\"$PATH:$d\" ;; esac; done; export PATH");
-        assert_eq!(path_line("/usr/bin:/bin", &system, Some(home), |_| true), None);
-    }
-
     #[test]
     fn setup_options() {
         let args = |a: &[&str]| parse(&a.iter().map(|s| s.to_string()).collect::<Vec<_>>());
-        assert_eq!(args(&["--look", "zsh", "--yes"]), Ok(Options { look: Some(Look::Zsh), yes: true, ..Options::default() }));
+        assert_eq!(args(&["--look", "neosh", "--yes"]), Ok(Options { look: Some(Look::Neosh), yes: true, ..Options::default() }));
+        assert!(args(&["--look", "zsh"]).is_err());
         assert_eq!(args(&[]), Ok(Options::default()));
         assert!(args(&["--look", "fish"]).is_err());
         // NSH-75

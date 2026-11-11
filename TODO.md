@@ -11,6 +11,7 @@ Newest asks first. Done items move to the log at the bottom.
   - a job started with `&` has no pid (`[1]+ <pid unknown>`), so `fg` cannot hand it the terminal and ^C does not stop it; `bg` says nothing (NSH-3);
   - `\#` and `\!` in a prompt (worked around in vendor/brush-interactive, NSH-72);
   - background jobs survive the terminal closing; `fg` leaves a job that ended in the foreground in the job list (worked around, NSH-63);
+  - `command -v a b` names only the first;
   - `select` does not parse; `globstar`'s `**/x` names paths that are not there; `coproc` can stop neosh.
 - Where the "? to ask why" hint sits.
 
@@ -20,6 +21,7 @@ Newest asks first. Done items move to the log at the bottom.
 - Low priority (deprioritized 2026-11-09): a Raycast release tag (neoai `raycast-v*`).
 
 ## Done
+- 2026-11-11: neosh works as the login shell straight after install, in Terminal and Ghostty: it finds itself and navi with no startup file (NSH-81), keeps its own prompt over macOS's `/etc/bashrc` one and opens with no stray status (NSH-82), and setup and the installer ask to make it the login shell, telling macOS so apps opened again start it (NSH-80). Setup starts with the prompt (starship by default, installed if missing), then plugins (NSH-78). zsh is out of setup (its look and the PATH copy).
 - 2026-11-11: the prompt's colours, per part (`NEOSH_PROMPT_COLORS`, in setup's "my own"), and starship as a setup choice, its presets previewed and written to its config (NSH-76, NSH-77); starship checked working in neosh (1.27.0: directory, branch, time taken, status colour).
 - 2026-11-11: choose what neosh's prompt shows in `neosh --setup` ("my own": parts switched by number, the prompt shown as it changes), saved as `NEOSH_PROMPT`; `--prompt '<parts>'` without questions (NSH-73 to NSH-75).
 - 2026-11-11: neosh builds on its brush fork (branch `neosh`); aliases are expanded in the text before parsing, as bash (NSH-71, in brush, neosh's workaround gone); a zsh PS1 from the environment (powerlevel10k) is not used (NSH-10).
