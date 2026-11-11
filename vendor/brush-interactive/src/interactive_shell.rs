@@ -216,11 +216,15 @@ impl<'a, IB: InputBackend, SE: brush_core::ShellExtensions> InteractiveShell<'a,
         terminal_integration: Option<&crate::term_integration::TerminalIntegration>,
     ) -> Result<InteractivePrompt, ShellError> {
         // Now that we've done that, compose the prompt.
+        // neosh NSH-72: `\#` and `\!` as bash has them; a prompt that cannot
+        // be expanded is drawn plain rather than ending the shell.
+        let saved = crate::numbers::put(shell);
         let mut prompt = InteractivePrompt {
-            prompt: shell.compose_prompt().await?,
-            alt_side_prompt: shell.compose_alt_side_prompt().await?,
-            continuation_prompt: shell.compose_continuation_prompt().await?,
+            prompt: crate::numbers::or_plain(shell.compose_prompt().await, "PS1", "$ "),
+            alt_side_prompt: crate::numbers::or_plain(shell.compose_alt_side_prompt().await, "BRUSH_PS_ALT", ""),
+            continuation_prompt: crate::numbers::or_plain(shell.compose_continuation_prompt().await, "PS2", "> "),
         };
+        crate::numbers::restore(shell, saved);
 
         if let Some(terminal_integration) = terminal_integration {
             let pre_prompt = terminal_integration.pre_prompt();
@@ -382,13 +386,16 @@ impl<'a, IB: InputBackend, SE: brush_core::ShellExtensions> InteractiveShell<'a,
         terminal_integration: Option<&crate::term_integration::TerminalIntegration>,
     ) -> Result<(), ShellError> {
         // Display the pre-command prompt (if there is one).
-        let precmd_prompt = shell.compose_precmd_prompt().await?;
+        let saved = crate::numbers::put(shell);
+        let precmd_prompt = crate::numbers::or_plain(shell.compose_precmd_prompt().await, "PS0", "");
+        crate::numbers::restore(shell, saved);
         if !precmd_prompt.is_empty() {
             print!("{precmd_prompt}");
         }
 
         // Update history (if applicable).
         shell.add_to_history(command_line.trim_end_matches('\n'))?;
+        crate::numbers::ran_command();
 
         // Next, run any zsh-style `preexec_functions`.
         // TODO(preexec_functions): verify if we need to save/restore exit results.

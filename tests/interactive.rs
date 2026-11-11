@@ -625,3 +625,13 @@ fn plugins_load_from_the_rc_and_their_aliases_run_as_bash_runs_them() {
     // Cloned once, where NSH-67 says.
     assert!(h.join(".neosh/plugins/src/z/z.sh").is_file());
 }
+
+// NSH-72
+#[test]
+fn a_prompt_with_bash_s_numbers_shows_them_and_the_shell_runs_on() {
+    let home = Home::new("numbers");
+    let screen = home.run(&["echo one", "echo two", "exit"], &[("PS1", "[\\#|\\!] \\$ ")]);
+    assert!(!screen.contains("not yet implemented"), "{screen}");
+    assert!(screen.contains("[1|1] $") && screen.contains("[3|3] $"), "{screen}");
+    assert!(screen.contains("two"), "{screen}");
+}

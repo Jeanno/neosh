@@ -363,6 +363,10 @@ navi where it is; navi reads it only when the question needs it.
 
 - NSH-10: The prompt is the directory, `~` for home, and `$` (`#` as root),
   unless `PS1` came with the environment or `~/.neoshrc` sets one.
+- NSH-72: A prompt (`PS0`, `PS1`, `PS2`) shows `\#` as this command's number
+  and `\!` as its history number, as bash does; brush has neither. A
+  prompt that still cannot be shown is said once, in a line naming it,
+  and drawn plain (`$ `); the shell runs on.
 - NSH-12: In a git repository the prompt also shows its branch, or the
   commit's short hash when none is checked out (`~/proj main $`), read from
   `.git` without running git. After a command that failed, it shows the

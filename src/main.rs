@@ -431,9 +431,12 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                 // NSH-71: aliases brush would split wrong, as functions.
                 aliases::settle(s);
                 if hooks(s, "precmd", &[]) && s.env_str("PS1").as_deref() != Some(prompt::DEFAULT_PS1) {
+                    // NSH-72: `\#` and `\!` put in, as bash does.
+                    let saved = brush_interactive::numbers::put(s);
                     if let Ok(p) = tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(s.compose_prompt())) {
                         composed = p;
                     }
+                    brush_interactive::numbers::restore(s, saved);
                 }
             }
             if let Some(line) = self.missed.take() {

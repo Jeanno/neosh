@@ -9,6 +9,8 @@ pub use interactive_shell::{InteractiveExecutionResult, InteractiveOptions, Inte
 mod input_backend;
 pub use input_backend::{InputBackend, InteractivePrompt, ReadResult};
 
+pub mod numbers;
+
 mod options;
 pub use options::UIOptions;
 

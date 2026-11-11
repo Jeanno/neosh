@@ -1,7 +1,7 @@
 # brush-interactive, as neosh uses it
 
 This is [brush-interactive](https://github.com/reubeno/brush) 0.4.0 from
-crates.io (MIT, see LICENSE), with three changes. The first: `src/reedline/validator.rs`
+crates.io (MIT, see LICENSE), with four changes. The first: `src/reedline/validator.rs`
 takes a hook, `set_completes`, that neosh uses to say a line for navi is
 complete even when bash would read it as unfinished (`?what's wrong`, whose
 `'` opens a quote). Without it, Enter on such a line waits for more input. The same check
@@ -12,5 +12,9 @@ a character in two (brush can, on `志`) is drawn plain rather than panic.
 A third, one line in `src/reedline/edit_mode.rs`: readline's `abort` is
 bound as reedline's Esc, so neosh can give Esc back its own job after navi
 mode (NSH-54) has used it.
+
+A fourth, `src/numbers.rs`: the prompts get `\#` and `\!` put in before
+brush expands them, and a prompt brush cannot expand is drawn plain
+rather than ending the shell (NSH-72).
 
 To move to a newer brush, copy the new crate here and make the same changes.

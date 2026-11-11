@@ -22,6 +22,7 @@ Newest asks first. Done items move to the log at the bottom.
 - Low priority (deprioritized 2026-11-09): a Raycast release tag (neoai `raycast-v*`).
 
 ## Done
+- 2026-11-11: a `PS1` with `\#` or `\!` (from the environment or the rc) no longer ends neosh with "not yet implemented"; they show as in bash, and a prompt that cannot be shown is drawn plain (NSH-72).
 - 2026-11-11: release v0.1.1 (plugins, rupa/z, aliases as in bash).
 - 2026-11-11: `plugins=(z)` installs rupa/z's own z in place of neosh's (NSH-69, NSH-70 struck), and an alias with a redirect, pipe or quote runs as in bash (NSH-71).
 - 2026-11-11: plugins named in `~/.neoshrc` (`plugins=(…)`: built in, a path, or a git repo cloned once; `plugin list`, `plugin update`), and `z` built in (NSH-66 to NSH-70).
