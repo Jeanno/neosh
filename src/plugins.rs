@@ -9,8 +9,9 @@ use brush_core::commands::{CommandArg, ExecutionContext};
 use brush_core::ExecutionResult;
 use crate::errors::Extensions as SE;
 
-/// NSH-69: plugins known by a short name, and the repo each is.
-pub const KNOWN: &[(&str, &str)] = &[("z", "rupa/z")];
+/// NSH-69: plugins known by a short name, the repo each is, and what it
+/// does (as setup offers it, NSH-78).
+pub const KNOWN: &[(&str, &str, &str)] = &[("z", "rupa/z", "jump to folders you use often, as z proj")];
 
 /// What each loaded plugin was, and where it came from, for `plugin list`.
 static LOADED: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
@@ -24,7 +25,7 @@ pub enum Source {
 
 /// NSH-66: what an entry names; `None` when it is none of these.
 pub fn source_of(entry: &str, home: Option<&Path>) -> Option<Source> {
-    if let Some((_, repo)) = KNOWN.iter().find(|(n, _)| *n == entry) {
+    if let Some((_, repo, _)) = KNOWN.iter().find(|(n, ..)| *n == entry) {
         return source_of(repo, home);
     }
     if let Some(rest) = entry.strip_prefix("~/") {
@@ -92,7 +93,7 @@ pub async fn load(shell: &mut brush_core::Shell<SE>) {
     for entry in entries(shell) {
         let file = match source_of(&entry, home.as_deref()) {
             None => {
-                say(&format!("plugin {entry}: no such plugin (known: {}; or a path, or owner/repo)", KNOWN.iter().map(|(n, _)| *n).collect::<Vec<_>>().join(", ")));
+                say(&format!("plugin {entry}: no such plugin (known: {}; or a path, or owner/repo)", KNOWN.iter().map(|(n, ..)| *n).collect::<Vec<_>>().join(", ")));
                 continue;
             }
             Some(Source::Path(path)) if path.is_dir() => match file_in(&path) {

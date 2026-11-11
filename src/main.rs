@@ -28,7 +28,7 @@ use brush_interactive::{InputBackend, InteractivePrompt, ReadResult, ShellError,
 
 const USAGE: &str = "\
 usage: neosh [-l] [--norc] [-c '<commands>' [name [args…]] | <script> [args…]]
-       neosh --setup [--look zsh|neosh | --prompt '<parts>'] [--yes]
+       neosh --setup [--look starship|neosh|zsh | --prompt '<parts>'] [--plugins '<names>'] [--yes]
 
 neosh is a bash-compatible shell with navi inside: start a line with ? to
 ask navi, or write a sentence that is not a command.
@@ -36,8 +36,8 @@ ask navi, or write a sentence that is not a command.
   -c COMMANDS  run the commands and exit with the last one's status
   -l, --login  read ~/.profile first, as a login shell does
   --norc       do not read ~/.neoshrc
-  --setup      choose navi's model and neosh's look (zsh's, neosh's own, or
-               your own pick of its parts: --prompt 'user dir branch time')
+  --setup      choose the prompt's look (starship, neosh's own, your pick of
+               its parts, or zsh's), plugins (z), then navi's model
   --version    say which neosh this is";
 
 /// What the command line asked for (NSH-1).

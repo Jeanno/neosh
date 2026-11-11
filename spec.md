@@ -54,7 +54,9 @@ hands a line to another shell. What neosh adds is below.
 ## Setup
 
 - NSH-47: Setup gets neosh ready in the terminal, a step at a time, each one
-  skippable: the model navi answers with, then neosh's look. As zsh's
+  skippable: how the prompt looks first, the prompt being most of what a
+  shell looks like, then plugins (NSH-78), then the model navi answers
+  with. As zsh's
   first-run setup does, it is offered when an interactive neosh starts with
   no `~/.neoshrc` (and no `--norc`): yes runs it, later asks again next
   time, never writes a `~/.neoshrc` holding only a comment, so it is not
@@ -65,8 +67,8 @@ hands a line to another shell. What neosh adds is below.
 - NSH-48: The model step runs `navi setup` (SET-1 to SET-29) and goes on
   when it is done. With no `navi` on `$PATH` it says navi is what answers
   `?` and how to install it, and goes on.
-- NSH-49: The look step offers neosh's own look (the default) or your
-  zsh's. For zsh's, neosh asks zsh for its prompt and colours as your zsh
+- NSH-49: The look step offers starship (the default, NSH-77), neosh's
+  own look, or your zsh's. For zsh's, neosh asks zsh for its prompt and colours as your zsh
   starts (reading `~/.zshrc`, with no terminal, at most 5 seconds):
   - starship in zsh gives `eval "$(starship init bash)"`, the same prompt;
   - a `PROMPT` of zsh's escapes is written as bash's `PS1`: `%n` `%m` `%M`
@@ -84,22 +86,25 @@ hands a line to another shell. What neosh adds is below.
 - NSH-50: What setup would write is shown first and written only on yes,
   into `~/.neoshrc` between `# >>> neosh setup >>>` and
   `# <<< neosh setup <<<`, replacing what an earlier setup wrote there and
-  nothing else. neosh's own look writes no prompt lines, only a comment
+  nothing else. It is written when the look and plugin steps are done,
+  before the model step; no to writing it still goes on to the model
+  step. neosh's own look writes no prompt lines, only a comment
   naming the choice, so a first start that kept every default is not
   offered setup again; that is written without asking, unless it takes an
   earlier setup's look out. It counts from the next neosh, or after
   `source ~/.neoshrc`; offered at start, it counts at once.
 - NSH-58: Setup says what it is for before asking (a line starting with
-  `?` asks navi; setup is the model that answers it, then the prompt's
-  look) and asks once: yes runs navi's setup straight away, with no second
-  question; leaving navi's setup with no model, navi says so (SET-29).
-  Each step is
-  headed `Step N of 2` in bold, with hints dim (plain without a terminal or
+  `?` asks navi; setup is how the prompt looks, plugins, then the model
+  that answers `?`) and asks once: yes goes straight to the first step,
+  with no second question; leaving navi's setup with no model, navi says
+  so (SET-29). Each step is
+  headed `Step N of 3` in bold, with hints dim (plain without a terminal or
   with `NO_COLOR`). At the end it says neosh is ready and shows how to
   begin: `?what's in this folder`, `?` for navi mode, `neosh --setup` to
   change it.
 - NSH-51: `neosh --setup --look zsh` or `--look neosh` makes the look choice
-  and skips the model step; with `--yes` it also writes without asking, so
+  and skips the plugin and model steps, keeping the plugins an earlier
+  setup chose; with `--yes` it also writes without asking, so
   it runs without a terminal.
 - NSH-73: `NEOSH_PROMPT` names the parts neosh's own prompt shows, read at
   each prompt, so setting it at the prompt shows at once: `user`, `host`
@@ -111,7 +116,7 @@ hands a line to another shell. What neosh adds is below.
   `dir branch took status`. `$` (`#` as root) always ends the prompt.
   It is neosh's own prompt's: a `PS1` set by the rc or the environment
   replaces that prompt, and `NEOSH_PROMPT` with it.
-- NSH-74: The look step offers a third choice, `my own`: the parts are
+- NSH-74: The look step offers a choice, `my own`: the parts are
   listed, numbered and marked on or off (starting from what an earlier
   setup chose), with the prompt shown below as it would be after a
   command that failed and took 12s. Typing numbers switches those parts,
@@ -134,17 +139,32 @@ hands a line to another shell. What neosh adds is below.
   asked again); Enter keeps them, `default` goes back to neosh's.
   `--setup --colors '<words>'` sets them without questions; a wrong word
   says so and exits 2.
-- NSH-77: The look step's fourth choice is starship, which draws the
-  prompt, with themes and icons, as it does in bash: setup writes
-  `eval "$(starship init bash)"`. Its presets are listed by number, each
+- NSH-77: The look step's first choice, and its default, is starship,
+  which draws the prompt, with themes and icons, as it does in bash: setup
+  writes `command -v starship >/dev/null && eval "$(starship init bash)"`,
+  so a neosh with no starship draws its own prompt. Its presets are listed by number, each
   shown as starship draws it (after a command that failed and took 12s);
   0 keeps the config there is, or starship's own. A preset taken is
   written to starship's config (`$STARSHIP_CONFIG`, or
   `~/.config/starship.toml`), the file there kept beside it as `.bak`,
-  said before asking (NSH-50). With no starship on `$PATH`, setup says how
-  to install it and writes nothing. `--setup --look starship` and
+  said before asking (NSH-50). Chosen with no starship on `$PATH`, setup
+  installs it without asking: `brew install starship` when there is
+  Homebrew, else starship's installer into `~/.local/bin` (`--yes`, no
+  sudo), putting that folder on `PATH` in the block when `PATH` lacks it.
+  If that fails it says how to install starship and takes neosh's own
+  look instead. `--look starship` with no
+  starship says how to install it, writes nothing and exits 1. `--setup --look starship` and
   `--preset <name>` choose it without questions; a preset starship does
   not have says so, naming them, and exits 2.
+- NSH-78: The plugin step offers the plugins neosh knows by name
+  (NSH-69), each with what it does, asked one at a time with yes as the
+  default (`z: jump to folders you use often, as z proj`). Those taken are
+  written in the setup block as `plugins=(z)`; none taken writes no
+  `plugins` line. Plugins named outside the block (a `plugins=` line of
+  your own) are left alone: the step says so and is skipped. Run again,
+  it starts from what an earlier setup chose. `--setup --plugins '<names>'`
+  chooses them without questions (`''` for none); a name neosh does not
+  know says so, naming those it knows, and exits 2.
 
 ## The language
 

@@ -53,9 +53,11 @@ navi's manual, `navi setup` and `navi usage`. This manual covers the shell.
   Yes runs it, "later" asks again next time, and "never" stops asking.
 - `neosh --setup` runs it any time; run again, it changes what it set. (`neosh setup`
   without dashes runs a script named `setup`, as bash would.)
-- Step 1 of 2, the model: runs `navi setup` to choose the model that answers `?`. With no
-  `navi` on `$PATH`, it says how to install navi and goes on.
-- Step 2 of 2, the look: neosh's own prompt (the default) or your zsh's.
+- Step 1 of 3, the look: starship (the default), neosh's own prompt, your own pick of
+  its parts, or your zsh's.
+  - Choosing starship with none installed installs it: `brew install starship`, or with no
+    Homebrew, starship's installer into `~/.local/bin`. If that fails, setup says how to
+    install it and uses neosh's own prompt.
   - For zsh's, neosh asks zsh for its prompt and colours (reading `~/.zshrc`, at most
     5 seconds).
   - starship in zsh becomes `eval "$(starship init bash)"`, the same prompt.
@@ -64,14 +66,20 @@ navi's manual, `navi setup` and `navi usage`. This manual covers the shell.
   - A prompt that runs commands or functions, uses `%(…)` conditions, or comes from a theme
     (oh-my-zsh, powerlevel10k) cannot be copied; setup says why and keeps neosh's prompt.
   - `CLICOLOR`, `LSCOLORS` and `LS_COLORS` from zsh are kept, so `ls` looks the same.
+- Step 2 of 3, plugins: offers each plugin neosh knows by name (today `z`), yes by
+  default, written as `plugins=(z)`. If your `~/.neoshrc` names plugins itself, outside
+  the markers, setup leaves them alone.
+- Step 3 of 3, the model: runs `navi setup` to choose the model that answers `?`. With no
+  `navi` on `$PATH`, it says how to install navi and goes on.
 - What setup would write is shown first and written only on yes.
 - It writes only between `# >>> neosh setup >>>` and `# <<< neosh setup <<<` in
   `~/.neoshrc`, replacing what an earlier setup wrote there and nothing else. Edit outside
   the markers freely.
 - Changes count from the next neosh, or after `source ~/.neoshrc`.
 - Without a terminal, `neosh --setup` says so and exits 1, unless every choice is given:
-  `neosh --setup --look zsh --yes` (or `--look neosh`) makes the look choice, skips the model
-  step, and writes without asking.
+  `neosh --setup --look zsh --yes` (or `--look neosh`, `--look starship`) makes the look
+  choice, skips the plugin and model steps (keeping plugins an earlier setup chose), and
+  writes without asking. `--plugins 'z'` (or `''` for none) chooses the plugins.
 
 ## Asking navi
 
@@ -221,7 +229,7 @@ prompt clears once navi has answered.
   `NEOSH_PROMPT_COLORS`.
 
   Or without questions: `neosh --setup --prompt 'folder branch time' --colors 'dir=green' --yes`.
-- For themes and icons, choose starship in `neosh --setup` (choice 4). You pick one of
+- For themes and icons, choose starship in `neosh --setup` (choice 1, the default). You pick one of
   its presets (tokyo-night, gruvbox-rainbow, pure…), seeing each as it will look, and
   it is saved as your `~/.config/starship.toml` (the old one kept as `.bak`). Most
   presets need a Nerd Font. Without questions: `neosh --setup --preset tokyo-night --yes`.
@@ -311,7 +319,7 @@ first.
 **`?` says navi is not installed.** Install navi and make sure `navi` is on your `$PATH`.
 The line runs nothing and its status is 127.
 
-**navi has no model / nothing answers.** Run `navi setup` (or `neosh --setup`, whose first
+**navi has no model / nothing answers.** Run `navi setup` (or `neosh --setup`, whose last
 step runs it).
 
 **Which model answered, what did it cost, why did it ask?** These are navi's: see navi's

@@ -462,7 +462,8 @@ fn setup_at_first_start_runs_navi_s_and_copies_zsh_s_look_at_once() {
     std::fs::remove_file(home.0.join(".neoshrc")).unwrap();
     std::fs::write(home.0.join(".zshrc"), "PROMPT='%n-zsh-look %# '\nRPROMPT='%T'\nexport LSCOLORS=Gxfxcxdxbxegedabagacad\n").unwrap();
     let zdotdir = home.0.display().to_string();
-    let screen = home.run(&["y", "2", "y", "echo $LSCOLORS", "exit"], &[("ZDOTDIR", &zdotdir)]);
+    // zsh's look, no z, write it.
+    let screen = home.run(&["y", "4", "n", "y", "echo $LSCOLORS", "exit"], &[("ZDOTDIR", &zdotdir)]);
     assert!(home.log().contains("ARGS: setup"), "{}", home.log());
     assert!(screen.contains("RPROMPT"), "{screen}");
     let rc = std::fs::read_to_string(home.0.join(".neoshrc")).unwrap();
@@ -478,8 +479,8 @@ fn setup_at_first_start_runs_navi_s_and_copies_zsh_s_look_at_once() {
 fn setup_picks_the_prompt_s_parts_with_it_shown_as_they_change() {
     let home = Home::new("pickparts");
     std::fs::remove_file(home.0.join(".neoshrc")).unwrap();
-    // Model step, "my own", folder only and the time, done, a colour, done, write it.
-    let screen = home.run(&["y", "3", "4 8", "", "time=bogus", "folder=green", "", "y", "false", "exit"], &[("USER", "tester")]);
+    // "my own", folder only and the time, done, a colour, done, no z, write it.
+    let screen = home.run(&["y", "3", "4 8", "", "time=bogus", "folder=green", "", "n", "y", "false", "exit"], &[("USER", "tester")]);
     assert!(screen.contains("[x] dir") && screen.contains("[ ] folder"), "{screen}");
     assert!(screen.contains("After a command that failed and took 12s:"), "{screen}");
     let rc = std::fs::read_to_string(home.0.join(".neoshrc")).unwrap();
@@ -493,21 +494,63 @@ fn setup_picks_the_prompt_s_parts_with_it_shown_as_they_change() {
     assert!(shown.is_match(after), "{after}");
 }
 
-// NSH-47, NSH-50: Enter all the way is a setup done, not one to offer again.
+/// A z already cloned (NSH-67), so taking it clones nothing.
+fn stub_z(home: &Home) {
+    let dir = home.0.join(".neosh/plugins/rupa/z");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("z.sh"), "z() { echo stub-z-here; }\n").unwrap();
+}
+
+// NSH-47, NSH-50, NSH-58, NSH-78: Enter all the way is a setup done, not one
+// to offer again: the look, then plugins, then the model.
 #[test]
 fn setup_with_every_default_is_done_and_says_how_to_begin() {
     let home = Home::new("defaults");
     std::fs::remove_file(home.0.join(".neoshrc")).unwrap();
-    let screen = home.run(&["", "", "echo still-here", "exit"], &[]);
-    assert_eq!(screen.matches("ARGS: setup").count() + home.log().matches("ARGS: setup").count(), 1, "{}", home.log());
+    stub_z(&home);
+    // No Homebrew, and starship's installer cannot be fetched.
+    let curl = home.0.join("bin/curl");
+    std::fs::write(&curl, "#!/bin/sh\necho \"CURL: $*\" >> \"$HOME/navi.log\"\nexit 7\n").unwrap();
+    use std::os::unix::fs::PermissionsExt as _;
+    std::fs::set_permissions(&curl, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let screen = home.run(&["", "", "", "", "z", "exit"], &[]);
+    assert!(home.log().contains("CURL: -sS https://starship.rs/install.sh"), "{}", home.log());
+    assert_eq!(home.log().matches("ARGS: setup").count(), 1, "{}", home.log());
     assert!(!screen.contains("Set it up now"), "{screen}");
-    assert!(screen.contains("Step 2 of 2"), "{screen}");
-    assert!(!screen.contains("Write it?"), "{screen}");
+    let at = |s: &str| screen.find(s).unwrap_or_else(|| panic!("{s} not in {screen}"));
+    assert!(at("Step 1 of 3 · How the prompt looks") < at("Step 2 of 3 · Plugins"), "{screen}");
+    assert!(at("Step 2 of 3") < at("Step 3 of 3 · The model"), "{screen}");
+    // Not installed: how to install it, and neosh's own look.
+    assert!(screen.contains("brew install starship"), "{screen}");
+    assert!(screen.contains("neosh's own look for now"), "{screen}");
+    assert!(screen.contains("Add z? [Y/n]"), "{screen}");
     assert!(screen.contains("neosh is ready."), "{screen}");
-    assert!(screen.contains("still-here"), "{screen}");
     let rc = std::fs::read_to_string(home.0.join(".neoshrc")).unwrap();
     assert!(rc.contains("neosh's own look"), "{rc}");
+    assert!(rc.contains("plugins=(z)"), "{rc}");
+    // z counts at once.
+    assert!(screen.contains("\nstub-z-here"), "{screen}");
     assert!(!home.run(&["exit"], &[]).contains("Set neosh up now?"));
+}
+
+// NSH-77: starship, the default, installed by Homebrew once chosen.
+#[test]
+fn choosing_starship_installs_it_with_brew() {
+    let home = Home::new("brewstarship");
+    std::fs::remove_file(home.0.join(".neoshrc")).unwrap();
+    let starship = "#!/bin/sh\ncase \"$1\" in preset) [ \"$2\" = --list ] && echo pure-preset ;; prompt) echo 'starship-drawn> ' ;; init) echo \"PS1='starship-drawn> '\" ;; esac\n";
+    let brew = format!("#!/bin/sh\necho \"BREW: $*\" >> \"$HOME/navi.log\"\nprintf '%s' '{}' > \"$(dirname \"$0\")/starship\"\nchmod +x \"$(dirname \"$0\")/starship\"\n", starship.replace('\'', "'\\''"));
+    let path = home.0.join("bin/brew");
+    std::fs::write(&path, brew).unwrap();
+    use std::os::unix::fs::PermissionsExt as _;
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    // Set up, starship (installed without asking), its own preset, no z, write it.
+    let screen = home.run(&["y", "", "", "n", "", "echo done", "exit"], &[]);
+    assert!(home.log().contains("BREW: install starship"), "{}", home.log());
+    let rc = std::fs::read_to_string(home.0.join(".neoshrc")).unwrap();
+    assert!(rc.contains("command -v starship >/dev/null && eval \"$(starship init bash)\""), "{rc}");
+    assert!(!rc.contains("plugins="), "{rc}");
+    assert!(screen.contains("starship-drawn> echo done"), "{screen}");
 }
 
 // NSH-34, NSH-36, NSH-37, NSH-39, NSH-41, NSH-42, NSH-43

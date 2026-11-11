@@ -147,7 +147,7 @@ fn starship_and_a_preset_are_written_the_config_before_kept() {
     std::fs::write(home.0.join(".config/starship.toml"), "# mine\n").unwrap();
     let out = home.neosh_with_path(&["--setup", "--preset", "tokyo-night", "--yes"], &path);
     assert!(out.status.success(), "{out:?}");
-    assert!(home.rc().contains("eval \"$(starship init bash)\""), "{}", home.rc());
+    assert!(home.rc().contains("command -v starship >/dev/null && eval \"$(starship init bash)\""), "{}", home.rc());
     assert_eq!(std::fs::read_to_string(home.0.join(".config/starship.toml")).unwrap(), "format = \"tokyo\"\n");
     assert_eq!(std::fs::read_to_string(home.0.join(".config/starship.toml.bak")).unwrap(), "# mine\n");
     let bad = home.neosh_with_path(&["--setup", "--preset", "nope", "--yes"], &path);
@@ -157,4 +157,26 @@ fn starship_and_a_preset_are_written_the_config_before_kept() {
     let none = home.neosh(&["--setup", "--look", "starship", "--yes"]);
     assert_eq!(none.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&none.stdout).contains("brew install starship"), "{none:?}");
+}
+
+// NSH-78
+#[test]
+fn plugins_are_chosen_without_questions_and_kept_when_not_asked() {
+    let home = Home::new("plugins");
+    let out = home.neosh(&["--setup", "--look", "neosh", "--plugins", "z", "--yes"]);
+    assert!(out.status.success(), "{out:?}");
+    assert!(home.rc().contains("plugins=(z)"), "{}", home.rc());
+    // Not asked: an earlier setup's plugins stay.
+    assert!(home.neosh(&["--setup", "--prompt", "dir time", "--yes"]).status.success());
+    assert!(home.rc().contains("plugins=(z)") && home.rc().contains("NEOSH_PROMPT='dir time'"), "{}", home.rc());
+    assert!(home.neosh(&["--setup", "--look", "neosh", "--plugins", "", "--yes"]).status.success());
+    assert!(!home.rc().contains("plugins="), "{}", home.rc());
+    let bad = home.neosh(&["--setup", "--look", "neosh", "--plugins", "nosuch", "--yes"]);
+    assert_eq!(bad.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&bad.stderr).contains("nosuch is not a plugin neosh knows (known: z)"), "{bad:?}");
+    // Plugins of your own, outside the block, are left alone.
+    std::fs::write(home.0.join(".neoshrc"), "plugins=(~/mine)\n").unwrap();
+    let own = home.neosh(&["--setup", "--look", "neosh", "--plugins", "z", "--yes"]);
+    assert!(String::from_utf8_lossy(&own.stdout).contains("names its own plugins"), "{own:?}");
+    assert!(!home.rc().contains("plugins=(z)"), "{}", home.rc());
 }

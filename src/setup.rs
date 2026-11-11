@@ -1,5 +1,5 @@
-//! Setup (NSH-47 to NSH-51): the model navi answers with, then neosh's look,
-//! in the terminal, written to `~/.neoshrc` between markers as zsh's
+//! Setup (NSH-47 to NSH-51): how the prompt looks, plugins, then the model
+//! navi answers with, in the terminal, written to `~/.neoshrc` between markers as zsh's
 //! first-run setup writes `~/.zshrc`.
 
 use std::io::{BufRead as _, IsTerminal as _, Write as _};
@@ -22,7 +22,8 @@ pub enum Look {
 }
 
 /// NSH-77: the line that makes starship neosh's prompt.
-const STARSHIP_INIT: &str = "eval \"$(starship init bash)\"";
+/// Guarded, so a neosh with no starship draws its own.
+const STARSHIP_INIT: &str = "command -v starship >/dev/null && eval \"$(starship init bash)\"";
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Options {
@@ -36,6 +37,8 @@ pub struct Options {
     pub colors: Option<String>,
     /// NSH-77: starship's preset, from `--preset`.
     pub preset: Option<String>,
+    /// NSH-78: the plugins, from `--plugins`.
+    pub plugins: Option<Vec<String>>,
 }
 
 /// NSH-51: what follows `--setup`.
@@ -64,6 +67,16 @@ pub fn parse(args: &[String]) -> Result<Options, String> {
                 options.parts = Some(shown.join(" "));
                 options.look = Some(Look::Neosh);
             }
+            // NSH-78
+            "--plugins" => {
+                let words = args.next().ok_or("--plugins takes the plugins to load, as 'z' ('' for none)")?;
+                let names: Vec<String> = words.split_whitespace().map(String::from).collect();
+                if let Some(name) = names.iter().find(|n| !crate::plugins::KNOWN.iter().any(|(k, ..)| k == n)) {
+                    let known: Vec<&str> = crate::plugins::KNOWN.iter().map(|(k, ..)| *k).collect();
+                    return Err(format!("--plugins: {name} is not a plugin neosh knows (known: {})", known.join(" ")));
+                }
+                options.plugins = Some(names);
+            }
             // NSH-76
             "--colors" => {
                 let words = args.next().ok_or("--colors takes part=colour words, as 'dir=green branch=yellow'")?;
@@ -87,7 +100,7 @@ pub fn parse(args: &[String]) -> Result<Options, String> {
 /// NSH-47: offered when an interactive neosh starts with no `~/.neoshrc`.
 pub fn offer(rc: &Path) {
     println!("{}", bold("Welcome to neosh."));
-    println!("Start a line with ? to ask navi anything. Setup takes a minute: the model that\nanswers ?, then how the prompt looks.");
+    println!("Start a line with ? to ask navi anything. Setup takes a minute: how the prompt\nlooks, plugins, then the model that answers ?.");
     match ask("Set neosh up now? [Y]es, [l]ater, [n]ever: ").as_str() {
         "" | "y" | "yes" => {
             let _ = run(&Options { at_start: true, ..Options::default() }, rc);
@@ -112,61 +125,77 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
         eprintln!("neosh: --setup asks its questions on a terminal; without one, give --look zsh|neosh|starship (or --prompt '<parts>') and --yes");
         return 1;
     }
-    // NSH-48: the model navi answers with, by navi's own setup.
-    if options.look.is_none() {
-        println!("\n{}", bold("Step 1 of 2 · The model that answers ?"));
-        match find("navi") {
-            // navi's setup says itself when it leaves no model answering (SET-29).
-            Some(navi) => {
-                let _ = Command::new(navi).arg("setup").status();
-            }
-            None => println!("navi answers ? and is not installed. Install it, then run neosh --setup again:\n  {INSTALL_NAVI}"),
-        }
-        println!("\n{}", bold("Step 2 of 2 · How the prompt looks"));
-        println!("  1  neosh's own  {}", dim("the directory, git branch and a failed status"));
-        println!("  2  like my zsh  {}", dim("its prompt and colours"));
+    // Every step is asked unless the look was given (NSH-51).
+    let steps = options.look.is_none();
+    let before = std::fs::read_to_string(rc).unwrap_or_default();
+    // NSH-49: the look first, starship's the default (NSH-77).
+    if steps {
+        println!("\n{}", bold("Step 1 of 3 · How the prompt looks"));
+        println!("  1  starship     {}", dim("themes and icons, drawn by starship"));
+        println!("  2  neosh's own  {}", dim("the directory, git branch and a failed status"));
         println!("  3  my own       {}", dim("neosh's, with the parts and colours you pick"));
-        println!("  4  starship     {}", dim("themes and icons, drawn by starship"));
+        println!("  4  like my zsh  {}", dim("its prompt and colours"));
     }
     let mut parts = options.parts.clone();
     let mut colors = options.colors.clone();
     let mut preset = options.preset.clone();
-    let look = options.look.unwrap_or_else(|| match ask("Choose [1]: ").as_str() {
-        "2" => Look::Zsh,
+    let mut look = options.look.unwrap_or_else(|| match ask("Choose [1]: ").as_str() {
+        "2" => Look::Neosh,
         "3" => {
-            let before = std::fs::read_to_string(rc).unwrap_or_default();
             let picked = pick(&setting_in(&before, "NEOSH_PROMPT").unwrap_or_else(|| crate::prompt::DEFAULT_PARTS.into()), terminal);
             colors = pick_colors(&picked, setting_in(&before, "NEOSH_PROMPT_COLORS"), terminal);
             parts = Some(picked);
             Look::Neosh
         }
-        "4" => {
-            if let Some(bin) = find("starship") {
-                preset = pick_preset(&bin, terminal);
-            }
-            Look::Starship
-        }
-        _ => Look::Neosh,
+        "4" => Look::Zsh,
+        _ => Look::Starship,
     });
-    // NSH-77: starship, and the preset that becomes its config.
+    // NSH-77: starship, installed if need be, and the preset that becomes its config.
     let starship = if look == Look::Starship {
-        let Some(bin) = find("starship") else {
-            println!("starship draws this prompt and is not installed. Install it, then run neosh --setup again:");
-            println!("  brew install starship\n  {}", dim("or: curl -sS https://starship.rs/install.sh | sh"));
-            return if options.yes { 1 } else { 0 };
-        };
-        if let Some(name) = &preset {
-            if !presets(&bin).contains(name) {
-                eprintln!("neosh: {name} is not one of starship's presets ({})", presets(&bin).join(", "));
-                return 2;
+        match find("starship").or_else(|| if steps { install_starship() } else { None }) {
+            None if !steps => {
+                println!("starship draws this prompt and is not installed. Install it, then run neosh --setup again:");
+                println!("  brew install starship\n  {}", dim(&format!("or: {INSTALL_STARSHIP}")));
+                return if options.yes { 1 } else { 0 };
+            }
+            None => {
+                println!("{}", dim("· neosh's own look for now; run neosh --setup once starship is installed."));
+                look = Look::Neosh;
+                None
+            }
+            Some(bin) => {
+                if steps {
+                    preset = pick_preset(&bin, terminal);
+                }
+                if let Some(name) = &preset {
+                    if !presets(&bin).contains(name) {
+                        eprintln!("neosh: {name} is not one of starship's presets ({})", presets(&bin).join(", "));
+                        return 2;
+                    }
+                }
+                Some(bin)
             }
         }
-        Some(bin)
     } else {
         None
     };
+    // NSH-78: the plugins; an earlier setup's are kept when not asked.
+    let plugins = match &options.plugins {
+        _ if own_plugins(&before) => {
+            if steps || options.plugins.is_some() {
+                if steps {
+                    println!("\n{}", bold("Step 2 of 3 · Plugins"));
+                }
+                println!("{}", dim(&format!("· {} names its own plugins; they stay as they are.", tilde(rc))));
+            }
+            None
+        }
+        Some(names) => Some(names.clone()),
+        None if steps => Some(pick_plugins(earlier_plugins(&before))),
+        None => earlier_plugins(&before),
+    };
     // NSH-49
-    let lines = match look {
+    let mut lines = match look {
         // NSH-74: the parts, unless they are the default ones.
         Look::Neosh => {
             let mut lines = vec![OWN_LOOK.to_string()];
@@ -179,7 +208,15 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
             }
             lines
         }
-        Look::Starship => vec![STARSHIP_INIT.to_string()],
+        Look::Starship => {
+            let mut lines = Vec::new();
+            // Installed where PATH does not look (~/.local/bin): put it there.
+            if let Some(dir) = starship.as_ref().and_then(|b| b.parent()).filter(|_| find("starship").is_none()) {
+                lines.push(format!("export PATH={}:\"$PATH\"", quote(&dir.display().to_string())));
+            }
+            lines.push(STARSHIP_INIT.to_string());
+            lines
+        }
         Look::Zsh => {
             let (lines, notes) = zsh_look();
             for note in notes {
@@ -188,9 +225,11 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
             lines
         }
     };
+    if let Some(names) = plugins.filter(|p| !p.is_empty()) {
+        lines.push(format!("plugins=({})", names.join(" ")));
+    }
     // NSH-50: shown, then written only on yes; neosh's own look, which sets
     // nothing, is written without asking unless it takes an earlier look out.
-    let before = std::fs::read_to_string(rc).unwrap_or_default();
     let after = with_block(&before, &lines);
     let earlier = block(&before).is_some_and(|b| b.iter().any(|l| l.trim() != OWN_LOOK && !l.trim().is_empty()));
     // NSH-77: the preset goes in starship's config, the one before kept beside it.
@@ -213,23 +252,34 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
             }
             println!();
         }
-        if asking && !yes_no("Write it? [Y/n] ", true) {
+        let write = !asking || yes_no("Write it? [Y/n] ", true);
+        if !write {
             println!("Nothing written.");
-            return 0;
         }
-        if after != before {
+        if write && after != before {
             if let Err(e) = std::fs::write(rc, after) {
                 eprintln!("neosh: could not write {}: {e}", rc.display());
                 return 1;
             }
             println!("{}", dim(&format!("· Saved in {}.", tilde(rc))));
         }
-        if let (Some(bin), Some((name, path))) = (&starship, &config) {
+        if let (true, Some(bin), Some((name, path))) = (write, &starship, &config) {
             if let Err(e) = write_preset(bin, name, path) {
                 eprintln!("neosh: could not write {}: {e}", path.display());
                 return 1;
             }
             println!("{}", dim(&format!("· Saved starship's preset {name} in {}.", tilde(path))));
+        }
+    }
+    // NSH-48: the model navi answers with, by navi's own setup.
+    if steps {
+        println!("\n{}", bold("Step 3 of 3 · The model that answers ?"));
+        match find("navi") {
+            // navi's setup says itself when it leaves no model answering (SET-29).
+            Some(navi) => {
+                let _ = Command::new(navi).arg("setup").status();
+            }
+            None => println!("navi answers ? and is not installed. Install it, then run neosh --setup again:\n  {INSTALL_NAVI}"),
         }
     }
     if terminal {
@@ -243,6 +293,66 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
         println!();
     }
     0
+}
+
+const INSTALL_STARSHIP: &str = "curl -sS https://starship.rs/install.sh | sh";
+
+/// NSH-77: installs starship, chosen and not there: by Homebrew when there
+/// is one, else by starship's installer into `~/.local/bin`; where it is.
+fn install_starship() -> Option<PathBuf> {
+    println!("\nstarship draws this prompt and is not installed; installing it…");
+    if let Some(brew) = find("brew") {
+        println!("{}", dim("· brew install starship"));
+        let ok = Command::new(&brew).args(["install", "starship"]).status().is_ok_and(|s| s.success());
+        let beside = brew.parent().map(|d| d.join("starship")).filter(|p| p.is_file());
+        if let Some(bin) = find("starship").or(beside).filter(|_| ok) {
+            return Some(bin);
+        }
+        println!("brew could not install starship.");
+    } else if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+        let dir = home.join(".local/bin");
+        let _ = std::fs::create_dir_all(&dir);
+        println!("{}", dim(&format!("· {INSTALL_STARSHIP} -s -- --yes --bin-dir {}", tilde(&dir))));
+        let script = format!("{INSTALL_STARSHIP} -s -- --yes --bin-dir \"$1\"");
+        let ok = Command::new("sh").args(["-c", &script, "sh"]).arg(&dir).status().is_ok_and(|s| s.success());
+        let bin = dir.join("starship");
+        if ok && bin.is_file() {
+            return Some(bin);
+        }
+        println!("starship's installer did not install it.");
+    }
+    println!("Install it any time:\n  brew install starship\n  {}", dim(&format!("or: {INSTALL_STARSHIP}")));
+    None
+}
+
+/// NSH-78: whether `plugins` is set outside setup's block, by the rc's own line.
+fn own_plugins(rc: &str) -> bool {
+    with_block(rc, &[]).lines().any(|l| {
+        let l = l.trim_start();
+        l.starts_with("plugins=") || l.starts_with("plugins+=")
+    })
+}
+
+/// NSH-78: the plugins an earlier setup chose.
+fn earlier_plugins(rc: &str) -> Option<Vec<String>> {
+    let value = setting_in(rc, "plugins")?;
+    Some(value.trim_matches(['(', ')']).split_whitespace().map(|w| w.trim_matches(['\'', '"']).to_string()).collect())
+}
+
+/// NSH-78: each plugin neosh knows, asked in turn; yes unless an earlier
+/// setup left it out.
+fn pick_plugins(earlier: Option<Vec<String>>) -> Vec<String> {
+    println!("\n{}", bold("Step 2 of 3 · Plugins"));
+    let mut taken = Vec::new();
+    for (name, repo, what) in crate::plugins::KNOWN {
+        let default = earlier.as_ref().is_none_or(|e| e.iter().any(|n| n == name));
+        println!("  {name}  {}", dim(&format!("{what} ({repo})")));
+        let question = format!("Add {name}? {} ", if default { "[Y/n]" } else { "[y/N]" });
+        if yes_no(&question, default) {
+            taken.push(name.to_string());
+        }
+    }
+    taken
 }
 
 /// NSH-74: what an earlier setup set `name` to, from its `name=` line.
