@@ -7,8 +7,9 @@
 #   curl -fsSL https://raw.githubusercontent.com/Jeanno/neosh/main/install.sh | sh
 #   ./install.sh               from a checkout: builds the code you have
 #
-# Run it again to update; --uninstall removes it. It never changes your login
-# shell or /etc/shells: it says how, when you are ready.
+# Run it again to update; --uninstall removes it. At the end it asks whether
+# neosh should be your login shell (no unless yes; NEOSH_LOGIN_SHELL=yes|no
+# answers without asking); yes adds it to /etc/shells by sudo and runs chsh.
 #
 # The program goes in ~/.local/bin (override with NEOSH_BIN_DIR). Built from
 # source when piped from curl, the checkout is cloned to ~/.local/share/neosh
@@ -167,5 +168,35 @@ if ! command -v navi >/dev/null 2>&1 && [ ! -x "$bin_dir/navi" ]; then
 fi
 say ""
 say "Try it: neosh"
-say "To make it your login shell later (asks for your password):"
-say "  echo $target | sudo tee -a /etc/shells && chsh -s $target"
+# NSH-80: neosh as the login shell, asked on the terminal (stdin may be this
+# script, piped from curl); no unless yes.
+later() {
+  say "To make it your login shell later (asks for your password):"
+  say "  echo $target | sudo tee -a /etc/shells && chsh -s $target"
+}
+current=$(dscl . -read "/Users/${USER:-$(id -un)}" UserShell 2>/dev/null | awk '{print $2}') || current=
+[ -n "$current" ] || current=$(getent passwd "${USER:-$(id -un)}" 2>/dev/null | cut -d: -f7) || current=
+if [ "$current" = "$target" ]; then
+  say "neosh is already your login shell."
+else
+  answer=${NEOSH_LOGIN_SHELL:-}
+  if [ -z "$answer" ] && { : </dev/tty; } 2>/dev/null; then
+    printf 'Make neosh your login shell? It asks for your password. [y/N] '
+    read -r answer </dev/tty || answer=
+  fi
+  case "$answer" in
+    y | Y | yes)
+      if grep -qxF "$target" /etc/shells || echo "$target" | sudo tee -a /etc/shells >/dev/null; then
+        if chsh -s "$target"; then
+          say "neosh is your login shell. Apps already open keep theirs until you log out and back in."
+        else
+          later
+        fi
+      else
+        say "neosh could not be added to /etc/shells."
+        later
+      fi
+      ;;
+    *) later ;;
+  esac
+fi

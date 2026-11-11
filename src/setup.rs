@@ -100,7 +100,7 @@ pub fn parse(args: &[String]) -> Result<Options, String> {
 /// NSH-47: offered when an interactive neosh starts with no `~/.neoshrc`.
 pub fn offer(rc: &Path) {
     println!("{}", bold("Welcome to neosh."));
-    println!("Start a line with ? to ask navi anything. Setup takes a minute: how the prompt\nlooks, plugins, then the model that answers ?.");
+    println!("Start a line with ? to ask navi anything. Setup takes a minute: how the prompt\nlooks, plugins, the model that answers ?, and your login shell.");
     match ask("Set neosh up now? [Y]es, [l]ater, [n]ever: ").as_str() {
         "" | "y" | "yes" => {
             let _ = run(&Options { at_start: true, ..Options::default() }, rc);
@@ -130,7 +130,7 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
     let before = std::fs::read_to_string(rc).unwrap_or_default();
     // NSH-49: the look first, starship's the default (NSH-77).
     if steps {
-        println!("\n{}", bold("Step 1 of 3 · How the prompt looks"));
+        println!("\n{}", bold("Step 1 of 4 · How the prompt looks"));
         println!("  1  starship     {}", dim("themes and icons, drawn by starship"));
         println!("  2  neosh's own  {}", dim("the directory, git branch and a failed status"));
         println!("  3  my own       {}", dim("neosh's, with the parts and colours you pick"));
@@ -184,7 +184,7 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
         _ if own_plugins(&before) => {
             if steps || options.plugins.is_some() {
                 if steps {
-                    println!("\n{}", bold("Step 2 of 3 · Plugins"));
+                    println!("\n{}", bold("Step 2 of 4 · Plugins"));
                 }
                 println!("{}", dim(&format!("· {} names its own plugins; they stay as they are.", tilde(rc))));
             }
@@ -281,7 +281,7 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
     }
     // NSH-48: the model navi answers with, by navi's own setup.
     if steps {
-        println!("\n{}", bold("Step 3 of 3 · The model that answers ?"));
+        println!("\n{}", bold("Step 3 of 4 · The model that answers ?"));
         match find("navi") {
             // navi's setup says itself when it leaves no model answering (SET-29).
             Some(navi) => {
@@ -289,6 +289,11 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
             }
             None => println!("navi answers ? and is not installed. Install it, then run neosh --setup again:\n  {INSTALL_NAVI}"),
         }
+    }
+    // NSH-80: neosh as the login shell, asked; no unless yes.
+    if steps {
+        println!("\n{}", bold("Step 4 of 4 · Your login shell"));
+        login_step();
     }
     if terminal {
         println!("\n{}", bold("neosh is ready."));
@@ -333,6 +338,57 @@ fn install_starship() -> Option<PathBuf> {
     None
 }
 
+/// NSH-80: the login shell the system has for this user (not `$SHELL`,
+/// which apps keep from when they started).
+fn login_shell() -> Option<String> {
+    let user = std::env::var("USER").ok()?;
+    let out = |program: &str, args: &[&str]| {
+        Command::new(program).args(args).stderr(Stdio::null()).output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+    };
+    if let Some(text) = out("dscl", &[".", "-read", &format!("/Users/{user}"), "UserShell"]) {
+        return text.split_whitespace().nth(1).map(String::from);
+    }
+    out("getent", &["passwd", &user]).and_then(|line| line.trim().rsplit(':').next().map(String::from)).filter(|s| !s.is_empty())
+}
+
+/// NSH-80: offers to make this neosh the login shell: added to
+/// `/etc/shells` (by sudo, which asks for the password) and set by `chsh`.
+fn login_step() {
+    let Some(me) = std::env::current_exe().ok().and_then(|p| p.canonicalize().ok()) else { return };
+    let me_str = me.display().to_string();
+    let same = |shell: &str| Path::new(shell).canonicalize().is_ok_and(|p| p == me);
+    if login_shell().is_some_and(|s| same(&s)) {
+        println!("{}", dim("· neosh is already your login shell."));
+        return;
+    }
+    println!("  {}", dim(&format!("Terminals then start neosh ({}); it asks for your password.", tilde(&me))));
+    if !yes_no("Make neosh your login shell? [y/N] ", false) {
+        println!("{}", dim("· Not changed. Run neosh --setup to do it later."));
+        return;
+    }
+    let listed = std::fs::read_to_string("/etc/shells").unwrap_or_default().lines().any(|l| l.trim() == me_str || same(l.trim()));
+    if !listed {
+        let ok = find("sudo").is_some_and(|sudo| {
+            let mut child = match Command::new(sudo).args(["tee", "-a", "/etc/shells"]).stdin(Stdio::piped()).stdout(Stdio::null()).spawn() {
+                Ok(c) => c,
+                Err(_) => return false,
+            };
+            let wrote = child.stdin.take().is_some_and(|mut i| writeln!(i, "{me_str}").is_ok());
+            wrote && child.wait().is_ok_and(|s| s.success())
+        });
+        if !ok {
+            println!("neosh could not be added to /etc/shells. To do it yourself:\n  echo {me_str} | sudo tee -a /etc/shells && chsh -s {me_str}");
+            return;
+        }
+    }
+    let ok = find("chsh").is_some_and(|chsh| Command::new(chsh).args(["-s", &me_str]).status().is_ok_and(|s| s.success()));
+    if ok {
+        println!("{}", dim("· neosh is your login shell. Apps already open keep their shell until you log out and back in."));
+    } else {
+        println!("chsh did not change it. To do it yourself:\n  chsh -s {me_str}");
+    }
+}
+
 /// NSH-78: whether `plugins` is set outside setup's block, by the rc's own line.
 fn own_plugins(rc: &str) -> bool {
     with_block(rc, &[]).lines().any(|l| {
@@ -350,7 +406,7 @@ fn earlier_plugins(rc: &str) -> Option<Vec<String>> {
 /// NSH-78: each plugin neosh knows, asked in turn; yes unless an earlier
 /// setup left it out.
 fn pick_plugins(earlier: Option<Vec<String>>) -> Vec<String> {
-    println!("\n{}", bold("Step 2 of 3 · Plugins"));
+    println!("\n{}", bold("Step 2 of 4 · Plugins"));
     let mut taken = Vec::new();
     for (name, repo, what) in crate::plugins::KNOWN {
         let default = earlier.as_ref().is_none_or(|e| e.iter().any(|n| n == name));

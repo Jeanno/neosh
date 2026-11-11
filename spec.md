@@ -29,8 +29,8 @@ hands a line to another shell. What neosh adds is below.
   of the latest release (NSH-64), else built from a clone in
   `~/.local/share/neosh`. Run again, it
   updates; `--uninstall` removes it. It replaces or removes only a neosh,
-  leaves history and `~/.neoshrc` alone, and never changes the login shell
-  or `/etc/shells`: it says how.
+  leaves history and `~/.neoshrc` alone, and changes the login shell only
+  on yes (NSH-80).
 - NSH-61: When there is no `navi` on `$PATH` or in the install directory,
   `install.sh` installs it too, without asking, by navi's own installer
   (neoai `neonavi/install.sh`) into the same directory. That installer says
@@ -55,8 +55,8 @@ hands a line to another shell. What neosh adds is below.
 
 - NSH-47: Setup gets neosh ready in the terminal, a step at a time, each one
   skippable: how the prompt looks first, the prompt being most of what a
-  shell looks like, then plugins (NSH-78), then the model navi answers
-  with. As zsh's
+  shell looks like, then plugins (NSH-78), the model navi answers
+  with, then the login shell (NSH-80). As zsh's
   first-run setup does, it is offered when an interactive neosh starts with
   no `~/.neoshrc` (and no `--norc`): yes runs it, later asks again next
   time, never writes a `~/.neoshrc` holding only a comment, so it is not
@@ -94,11 +94,11 @@ hands a line to another shell. What neosh adds is below.
   earlier setup's look out. It counts from the next neosh, or after
   `source ~/.neoshrc`; offered at start, it counts at once.
 - NSH-58: Setup says what it is for before asking (a line starting with
-  `?` asks navi; setup is how the prompt looks, plugins, then the model
-  that answers `?`) and asks once: yes goes straight to the first step,
+  `?` asks navi; setup is how the prompt looks, plugins, the model
+  that answers `?`, and the login shell) and asks once: yes goes straight to the first step,
   with no second question; leaving navi's setup with no model, navi says
   so (SET-29). Each step is
-  headed `Step N of 3` in bold, with hints dim (plain without a terminal or
+  headed `Step N of 4` in bold, with hints dim (plain without a terminal or
   with `NO_COLOR`). At the end it says neosh is ready and shows how to
   begin: `?what's in this folder`, `?` for navi mode, `neosh --setup` to
   change it.
@@ -174,6 +174,17 @@ hands a line to another shell. What neosh adds is below.
   the system's (`/etc/paths`, `/etc/paths.d`), each only when `PATH` does
   not have it already, so a neosh started from another has it once.
   Every setup writes it afresh; with no zsh, or no such folders, none.
+- NSH-80: Setup's last step, and the installer's last question, is whether
+  neosh is your login shell: the system's (`dscl` on macOS, `getent`
+  elsewhere), not `$SHELL`, which apps keep from when they started. When
+  it already is, that is said and nothing asked. Otherwise `[y/N]`, no
+  unless yes: yes adds neosh's path to `/etc/shells` when it is not there
+  (`sudo tee -a`, which asks for the password) and runs `chsh -s`, then
+  says that apps already open keep their shell until you log out and back
+  in; if either fails it says the commands to run. No says how to do it
+  later. The installer asks on the terminal even when piped from curl,
+  and without one does not ask; `NEOSH_LOGIN_SHELL=yes` or `no` answers
+  it.
 
 ## The language
 

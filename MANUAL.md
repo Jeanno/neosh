@@ -33,7 +33,9 @@ navi's manual, `navi setup` and `navi usage`. This manual covers the shell.
   navi's own installer (it needs Node 22 or newer, and says so). `NEOSH_INSTALL_NAVI=no`
   leaves navi out. If navi's install fails, neosh is still installed and the installer says
   how to try again.
-- It never changes your login shell or `/etc/shells`.
+- At the end it asks whether neosh should be your login shell (no unless you say yes;
+  `NEOSH_LOGIN_SHELL=yes` or `no` answers without asking). Yes adds neosh to `/etc/shells`
+  (sudo asks for your password) and runs `chsh`.
 
 ## Starting neosh
 
@@ -53,7 +55,7 @@ navi's manual, `navi setup` and `navi usage`. This manual covers the shell.
   Yes runs it, "later" asks again next time, and "never" stops asking.
 - `neosh --setup` runs it any time; run again, it changes what it set. (`neosh setup`
   without dashes runs a script named `setup`, as bash would.)
-- Step 1 of 3, the look: starship (the default), neosh's own prompt, your own pick of
+- Step 1 of 4, the look: starship (the default), neosh's own prompt, your own pick of
   its parts, or your zsh's.
   - Choosing starship with none installed installs it: `brew install starship`, or with no
     Homebrew, starship's installer into `~/.local/bin`. If that fails, setup says how to
@@ -66,13 +68,15 @@ navi's manual, `navi setup` and `navi usage`. This manual covers the shell.
   - A prompt that runs commands or functions, uses `%(…)` conditions, or comes from a theme
     (oh-my-zsh, powerlevel10k) cannot be copied; setup says why and keeps neosh's prompt.
   - `CLICOLOR`, `LSCOLORS` and `LS_COLORS` from zsh are kept, so `ls` looks the same.
-- Step 2 of 3, plugins: offers each plugin neosh knows by name (today `z`), yes by
+- Step 2 of 4, plugins: offers each plugin neosh knows by name (today `z`), yes by
   default, written as `plugins=(z)`. If your `~/.neoshrc` names plugins itself, outside
   the markers, setup leaves them alone.
 - Setup also copies the folders your zsh adds to `PATH` (from `~/.zprofile`, `~/.zshrc`),
   so neosh as your login shell finds the same commands, navi included.
-- Step 3 of 3, the model: runs `navi setup` to choose the model that answers `?`. With no
+- Step 3 of 4, the model: runs `navi setup` to choose the model that answers `?`. With no
   `navi` on `$PATH`, it says how to install navi and goes on.
+- Step 4 of 4, your login shell: whether terminals should start neosh. No unless you say
+  yes; if neosh already is your login shell, it says so and asks nothing.
 - What setup would write is shown first and written only on yes.
 - It writes only between `# >>> neosh setup >>>` and `# <<< neosh setup <<<` in
   `~/.neoshrc`, replacing what an earlier setup wrote there and nothing else. Edit outside
@@ -308,8 +312,8 @@ Known differences from bash (brush's to fix):
 
 ## Making neosh your login shell
 
-neosh never does this itself. When you are ready, the installer's last lines give the
-commands; they ask for your password:
+The installer and `neosh --setup` each ask, at the end; yes runs these for you. To do it
+yourself (it asks for your password):
 
     echo ~/.local/bin/neosh | sudo tee -a /etc/shells && chsh -s ~/.local/bin/neosh
 

@@ -463,7 +463,7 @@ fn setup_at_first_start_runs_navi_s_and_copies_zsh_s_look_at_once() {
     std::fs::write(home.0.join(".zshrc"), "PROMPT='%n-zsh-look %# '\nRPROMPT='%T'\nexport LSCOLORS=Gxfxcxdxbxegedabagacad\n").unwrap();
     let zdotdir = home.0.display().to_string();
     // zsh's look, no z, write it.
-    let screen = home.run(&["y", "4", "n", "y", "echo $LSCOLORS", "exit"], &[("ZDOTDIR", &zdotdir)]);
+    let screen = home.run(&["y", "4", "n", "y", "", "echo $LSCOLORS", "exit"], &[("ZDOTDIR", &zdotdir)]);
     assert!(home.log().contains("ARGS: setup"), "{}", home.log());
     assert!(screen.contains("RPROMPT"), "{screen}");
     let rc = std::fs::read_to_string(home.0.join(".neoshrc")).unwrap();
@@ -480,7 +480,7 @@ fn setup_picks_the_prompt_s_parts_with_it_shown_as_they_change() {
     let home = Home::new("pickparts");
     std::fs::remove_file(home.0.join(".neoshrc")).unwrap();
     // "my own", folder only and the time, done, a colour, done, no z, write it.
-    let screen = home.run(&["y", "3", "4 8", "", "time=bogus", "folder=green", "", "n", "y", "false", "exit"], &[("USER", "tester")]);
+    let screen = home.run(&["y", "3", "4 8", "", "time=bogus", "folder=green", "", "n", "y", "", "false", "exit"], &[("USER", "tester")]);
     assert!(screen.contains("[x] dir") && screen.contains("[ ] folder"), "{screen}");
     assert!(screen.contains("After a command that failed and took 12s:"), "{screen}");
     let rc = std::fs::read_to_string(home.0.join(".neoshrc")).unwrap();
@@ -513,13 +513,16 @@ fn setup_with_every_default_is_done_and_says_how_to_begin() {
     std::fs::write(&curl, "#!/bin/sh\necho \"CURL: $*\" >> \"$HOME/navi.log\"\nexit 7\n").unwrap();
     use std::os::unix::fs::PermissionsExt as _;
     std::fs::set_permissions(&curl, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let screen = home.run(&["", "", "", "", "z", "exit"], &[]);
+    let screen = home.run(&["", "", "", "", "", "z", "exit"], &[]);
     assert!(home.log().contains("CURL: -sS https://starship.rs/install.sh"), "{}", home.log());
     assert_eq!(home.log().matches("ARGS: setup").count(), 1, "{}", home.log());
     assert!(!screen.contains("Set it up now"), "{screen}");
     let at = |s: &str| screen.find(s).unwrap_or_else(|| panic!("{s} not in {screen}"));
-    assert!(at("Step 1 of 3 · How the prompt looks") < at("Step 2 of 3 · Plugins"), "{screen}");
-    assert!(at("Step 2 of 3") < at("Step 3 of 3 · The model"), "{screen}");
+    assert!(at("Step 1 of 4 · How the prompt looks") < at("Step 2 of 4 · Plugins"), "{screen}");
+    assert!(at("Step 2 of 4") < at("Step 3 of 4 · The model"), "{screen}");
+    assert!(at("Step 3 of 4") < at("Step 4 of 4 · Your login shell"), "{screen}");
+    // NSH-80: no, unless yes.
+    assert!(screen.contains("Make neosh your login shell? [y/N]") && screen.contains("Not changed."), "{screen}");
     // Not installed: how to install it, and neosh's own look.
     assert!(screen.contains("brew install starship"), "{screen}");
     assert!(screen.contains("neosh's own look for now"), "{screen}");
@@ -545,7 +548,7 @@ fn choosing_starship_installs_it_with_brew() {
     use std::os::unix::fs::PermissionsExt as _;
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
     // Set up, starship (installed without asking), its own preset, no z, write it.
-    let screen = home.run(&["y", "", "", "n", "", "echo done", "exit"], &[]);
+    let screen = home.run(&["y", "", "", "n", "", "", "echo done", "exit"], &[]);
     assert!(home.log().contains("BREW: install starship"), "{}", home.log());
     let rc = std::fs::read_to_string(home.0.join(".neoshrc")).unwrap();
     assert!(rc.contains("command -v starship >/dev/null && eval \"$(starship init bash)\""), "{rc}");
@@ -697,4 +700,28 @@ fn a_prompt_with_bash_s_numbers_shows_them_and_the_shell_runs_on() {
     assert!(!screen.contains("not yet implemented"), "{screen}");
     assert!(screen.contains("[1|1] $") && screen.contains("[3|3] $"), "{screen}");
     assert!(screen.contains("two"), "{screen}");
+}
+
+// NSH-80: yes adds neosh to /etc/shells by sudo and sets it by chsh; here
+// both are stand-ins that only say what they were given.
+#[test]
+fn setup_makes_neosh_the_login_shell_on_yes() {
+    let home = Home::new("loginshell");
+    use std::os::unix::fs::PermissionsExt as _;
+    for (name, body) in [
+        ("sudo", "#!/bin/sh\necho \"SUDO: $* <$(cat)>\" >> \"$HOME/navi.log\"\n"),
+        ("chsh", "#!/bin/sh\necho \"CHSH: $*\" >> \"$HOME/navi.log\"\n"),
+    ] {
+        let path = home.0.join("bin").join(name);
+        std::fs::write(&path, body).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    std::fs::write(home.0.join(".neoshrc"), "# >>> neosh setup >>>\n# neosh's own look; `neosh --setup` changes it.\n# <<< neosh setup <<<\n").unwrap();
+    // neosh's own look, no z, then yes to the login shell.
+    let me = std::path::Path::new(env!("CARGO_BIN_EXE_neosh")).canonicalize().unwrap().display().to_string();
+    let screen = home.run(&[&format!("{me} --setup"), "2", "n", "y", "exit", "exit"], &[]);
+    let log = home.log();
+    assert!(log.contains(&format!("SUDO: tee -a /etc/shells <{me}>")), "{log}");
+    assert!(log.contains(&format!("CHSH: -s {me}")), "{log}");
+    assert!(screen.contains("neosh is your login shell."), "{screen}");
 }

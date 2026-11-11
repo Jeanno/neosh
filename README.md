@@ -40,12 +40,12 @@ builds the code you have.
 [navi](https://github.com/Jeanno/neoai#navi-in-the-terminal), which needs
 Node 22 or newer, is put beside it when it isn't there yet
 (`NEOSH_INSTALL_NAVI=no` leaves it out). Run the installer again to update,
-or add `-s -- --uninstall` to remove neosh. Then type `neosh`. It doesn't
-change your login shell; the installer says how, for when you are ready.
+or add `-s -- --uninstall` to remove neosh. Then type `neosh`. At the end
+it asks whether neosh should be your login shell (no unless you say yes).
 
 The first start offers setup (`neosh --setup` any time): how the prompt
 looks (starship by default, installed if missing),
-plugins such as z, then the model navi answers with. It writes
+plugins such as z, the model navi answers with, then your login shell. It writes
 only between the `# >>> neosh setup >>>` markers in `~/.neoshrc`.
 
 ## Asking navi
