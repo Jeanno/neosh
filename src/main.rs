@@ -4,6 +4,7 @@
 //! starting it follows brush-shell's entry. What neosh adds is the line
 //! reader around brush's own, which sends lines for navi to navi (NSH-4).
 
+mod aliases;
 mod away;
 mod bang;
 mod cd;
@@ -17,7 +18,6 @@ mod prompt;
 mod record;
 mod setup;
 mod term;
-mod z;
 
 use std::io::{IsTerminal as _, Write as _};
 use std::path::{Path, PathBuf};
@@ -428,8 +428,8 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
             // NSH-33: zsh's precmd, the status left for the prompt; a PS1 it set counts.
             let mut composed = prompt.prompt.clone();
             if let Some(s) = guard.as_mut() {
-                // NSH-69: the directory, for `z`.
-                z::at_prompt(&**s);
+                // NSH-71: aliases brush would split wrong, as functions.
+                aliases::settle(s);
                 if hooks(s, "precmd", &[]) && s.env_str("PS1").as_deref() != Some(prompt::DEFAULT_PS1) {
                     if let Ok(p) = tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(s.compose_prompt())) {
                         composed = p;

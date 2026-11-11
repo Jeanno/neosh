@@ -398,7 +398,7 @@ navi where it is; navi reads it only when the question needs it.
 - NSH-66: `plugins=(…)` in `~/.neoshrc` names what to load, in order, once
   the rc has run: an interactive neosh only, as the rc is. Each entry is
   one of:
-  - a plugin built into neosh, by its name (`z`, NSH-69);
+  - a plugin known by a short name (`z`, NSH-69);
   - a path (`~/x`, `/x`, `./x`): a `.sh` or `.bash` file, or a folder,
     whose `<folder>.plugin.sh`, `<folder>.plugin.bash`, `plugin.sh`,
     `init.sh` or `<folder>.sh` is sourced;
@@ -415,20 +415,21 @@ navi where it is; navi reads it only when the question needs it.
   line naming the entry; the others still load and the shell starts.
   `plugin list` shows each loaded plugin and where it came from; `plugin`
   alone says how to use it.
-- NSH-69: The `z` plugin, built in: each directory the shell is in at a
-  prompt is recorded in `~/.neosh_z` (or the file `_Z_DATA` names), as
-  rupa/z keeps `~/.z` (`path|rank|time`): its rank goes up by one and its
-  time is now. Home and `/` are not recorded. When the ranks add up to
-  more than 9000 each is made 0.99 of itself, and those under 1 go. A
-  missing `~/.neosh_z` starts from `~/.z`, if there is one.
-- NSH-70: `z <words>` goes (as `cd` does, so `OLDPWD` and `cd -` work) to
-  the recorded directory, still there, that matches the words in order
-  with the highest frecency: its rank times 4 if it was last there within
-  the hour, 2 within the day, ½ within the week, ¼ before. Matching is
-  case-sensitive first, then not. A word that is a directory goes there.
-  `z` alone or `z -l [words]` lists the matches, best last, with their
-  scores; `z -x` forgets the current directory. Directories gone are
-  dropped. No match says `z: no directory matches <words>` and fails.
+- NSH-69: Short names neosh knows, each a repo cloned as NSH-67 says:
+  `z` is rupa/z (github.com/rupa/z), installed and run as it is, so `z`
+  is that `z`: it records directories in `~/.z` and `z <words>` goes to
+  the best match. A short name not known says so (NSH-68), naming the
+  ones that are.
+- NSH-70: (Struck: z built into neosh; it is rupa/z's own, NSH-69.)
+- NSH-71: An alias runs as bash runs it, even where brush would not:
+  brush splits an alias's text at spaces and parses none of it, so a
+  redirect, pipe, quote or `;` in it would be a word given to the
+  command. Before each prompt, each such alias becomes a function of the
+  same name that runs the text with the words after it (`alias z='_z
+  2>&1'` is `z() { _z 2>&1 "$@"; }`); an alias that starts with its own
+  name calls the command (`command grep …`). One of plain words stays an
+  alias. Once a function, `alias` no longer lists it and `type` says it
+  is a function.
 
 ## Open
 

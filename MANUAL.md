@@ -218,7 +218,7 @@ Name what to load in `~/.neoshrc`, in order:
 
     plugins=(z ~/my/plugin owner/repo)
 
-- A name built into neosh: `z` (below).
+- A short name neosh knows: `z` is [rupa/z](https://github.com/rupa/z) (below).
 - A path: a `.sh` file, or a folder whose `<folder>.plugin.sh`, `<folder>.plugin.bash`,
   `plugin.sh`, `init.sh` or `<folder>.sh` is sourced.
 - A git repo: `owner/repo` for GitHub, or a URL (`https://…`, `git@…`, `file://…`). It is
@@ -229,13 +229,14 @@ Name what to load in `~/.neoshrc`, in order:
 - What cannot load is said in a line, and the shell starts without it.
 - `plugin list` shows what loaded and from where.
 
-**z.** `plugins=(z)` records each directory you are in at a prompt (in `~/.neosh_z`,
-or the file `_Z_DATA` names; home and `/` are left out), as rupa/z does, and starts from
-your `~/.z` if you had one.
-- `z <words>` goes to the directory that matches the words in order, the one you use
-  most and most lately (case first matched exactly, then not). `z neo sh` finds
-  `~/Projects/neosh`. `cd -` comes back.
-- `z` or `z -l [words]` lists the matches, best last; `z -x` forgets this directory.
+**z.** `plugins=(z)` installs rupa/z from GitHub the first time and runs it as it is: it
+records the directories you go to in `~/.z`, and `z <words>` goes to the one that matches,
+the one you use most and most lately. `z neo sh` finds `~/Projects/neosh`; `z -l` lists
+them; `z -x` forgets this directory. `plugin update` brings it up to date.
+
+**Aliases** run as bash runs them. One with a redirect, pipe, quote or `;` in it (as
+rupa/z's `alias z='_z 2>&1'`) becomes a function of the same name before the next prompt,
+so `alias` no longer lists it but it works as it would in bash.
 
 ## Hooks and integrations
 

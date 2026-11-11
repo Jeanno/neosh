@@ -1,5 +1,5 @@
 //! Plugins (NSH-66 to NSH-68): `plugins=(…)` in `~/.neoshrc` names what to
-//! load — a plugin built in, a file or folder, or a git repo cloned once.
+//! load — a plugin known by name, a file or folder, or a git repo cloned once.
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -9,15 +9,14 @@ use brush_core::commands::{CommandArg, ExecutionContext};
 use brush_core::ExecutionResult;
 use crate::errors::Extensions as SE;
 
-/// The plugins built into neosh.
-pub const BUILT_IN: &[&str] = &["z"];
+/// NSH-69: plugins known by a short name, and the repo each is.
+pub const KNOWN: &[(&str, &str)] = &[("z", "rupa/z")];
 
 /// What each loaded plugin was, and where it came from, for `plugin list`.
 static LOADED: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
 
 #[derive(Debug, PartialEq)]
 pub enum Source {
-    BuiltIn(String),
     Path(PathBuf),
     /// A repo: where to clone it from, and its `owner/repo` name.
     Repo { url: String, name: String },
@@ -25,8 +24,8 @@ pub enum Source {
 
 /// NSH-66: what an entry names; `None` when it is none of these.
 pub fn source_of(entry: &str, home: Option<&Path>) -> Option<Source> {
-    if BUILT_IN.contains(&entry) {
-        return Some(Source::BuiltIn(entry.to_string()));
+    if let Some((_, repo)) = KNOWN.iter().find(|(n, _)| *n == entry) {
+        return source_of(repo, home);
     }
     if let Some(rest) = entry.strip_prefix("~/") {
         return home.map(|h| Source::Path(h.join(rest)));
@@ -93,14 +92,7 @@ pub async fn load(shell: &mut brush_core::Shell<SE>) {
     for entry in entries(shell) {
         let file = match source_of(&entry, home.as_deref()) {
             None => {
-                say(&format!("plugin {entry}: no such plugin (built in: {}; or a path, or owner/repo)", BUILT_IN.join(", ")));
-                continue;
-            }
-            Some(Source::BuiltIn(name)) => {
-                if name == "z" {
-                    crate::z::install(shell);
-                }
-                LOADED.lock().unwrap_or_else(|e| e.into_inner()).push((entry.clone(), "built in".into()));
+                say(&format!("plugin {entry}: no such plugin (known: {}; or a path, or owner/repo)", KNOWN.iter().map(|(n, _)| *n).collect::<Vec<_>>().join(", ")));
                 continue;
             }
             Some(Source::Path(path)) if path.is_dir() => match file_in(&path) {
@@ -234,7 +226,11 @@ mod tests {
     #[test]
     fn an_entry_is_a_built_in_a_path_or_a_repo() {
         let home = Path::new("/h");
-        assert_eq!(source_of("z", Some(home)), Some(Source::BuiltIn("z".into())));
+        // NSH-69: a known name is its repo.
+        assert_eq!(
+            source_of("z", Some(home)),
+            Some(Source::Repo { url: "https://github.com/rupa/z.git".into(), name: "rupa/z".into() })
+        );
         assert_eq!(source_of("~/x/p", Some(home)), Some(Source::Path("/h/x/p".into())));
         assert_eq!(source_of("/opt/p.sh", Some(home)), Some(Source::Path("/opt/p.sh".into())));
         assert_eq!(source_of("./p", Some(home)), Some(Source::Path("./p".into())));

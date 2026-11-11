@@ -88,8 +88,8 @@ not what they hold.
   `^old^new`), `CDPATH`, `shopt -s autocd cdspell`.
 - The prompt shows the directory, git branch, slow-command time and failed
   status. Set `PS1` in `~/.neoshrc` to change it.
-- Plugins named in `~/.neoshrc`: `plugins=(z ~/my/plugin owner/repo)`, with `z`
-  built in.
+- Plugins named in `~/.neoshrc`: `plugins=(z ~/my/plugin owner/repo)`, where `z`
+  is rupa/z, installed from GitHub.
 - `precmd`/`preexec` hooks, `PROMPT_COMMAND`, `trap DEBUG` and `bind -x`
   work, so starship, zoxide, fzf and direnv use their bash setup.
 - History lives in `~/.neosh_history`; `HISTCONTROL`, `HISTIGNORE` and

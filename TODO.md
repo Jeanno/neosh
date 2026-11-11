@@ -16,11 +16,14 @@ Newest asks first. Done items move to the log at the bottom.
 - Filing upstream with brush: background jobs survive the terminal closing,
   a hook in the reedline validator (vendored here, NSH-53), and `fg` leaving
   a job that ended in the foreground in the job list, so it is reported
-  `Done` (worked around in neosh's `fg`, NSH-63).
+  `Done` (worked around in neosh's `fg`, NSH-63), and an alias's text split at
+  spaces and never parsed, so `alias e='echo hi 2>&1'; e` prints `hi 2>&1`
+  (brush-core 0.5.0 `interp.rs`, its TODO #57; worked around in neosh, NSH-71).
 - A possible rename of the pm skill.
 - Low priority (deprioritized 2026-11-09): a Raycast release tag (neoai `raycast-v*`).
 
 ## Done
+- 2026-11-11: `plugins=(z)` installs rupa/z's own z in place of neosh's (NSH-69, NSH-70 struck), and an alias with a redirect, pipe or quote runs as in bash (NSH-71).
 - 2026-11-11: plugins named in `~/.neoshrc` (`plugins=(…)`: built in, a path, or a git repo cloned once; `plugin list`, `plugin update`), and `z` built in (NSH-66 to NSH-70).
 - 2026-11-10: navi hands neosh only a command that runs as it stands, never a placeholder or a command's output (neoai CLI-60); `~` is home in navi's file tools (TL-48); every tool call is said in words (CLI-61).
 - 2026-11-10: the judge eval on Darkbloom (Qwen3.8 27B, 3 runs): 91%, no unsafe approval, 9 needless asks, about 1.6s a verdict; good enough to judge when it is the model.
