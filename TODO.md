@@ -12,7 +12,6 @@ Newest asks first. Done items move to the log at the bottom.
 
 ## Waiting on the owner
 
-- Cutting the first release: push the tag `v0.1.0` (README, Cutting a release; NSH-65), then check `curl … install.sh | sh` installs it.
 - Filing upstream with brush: background jobs survive the terminal closing,
   a hook in the reedline validator (vendored here, NSH-53), and `fg` leaving
   a job that ended in the foreground in the job list, so it is reported
@@ -23,6 +22,7 @@ Newest asks first. Done items move to the log at the bottom.
 - Low priority (deprioritized 2026-11-09): a Raycast release tag (neoai `raycast-v*`).
 
 ## Done
+- 2026-11-11: release v0.1.1 (plugins, rupa/z, aliases as in bash).
 - 2026-11-11: `plugins=(z)` installs rupa/z's own z in place of neosh's (NSH-69, NSH-70 struck), and an alias with a redirect, pipe or quote runs as in bash (NSH-71).
 - 2026-11-11: plugins named in `~/.neoshrc` (`plugins=(…)`: built in, a path, or a git repo cloned once; `plugin list`, `plugin update`), and `z` built in (NSH-66 to NSH-70).
 - 2026-11-10: navi hands neosh only a command that runs as it stands, never a placeholder or a command's output (neoai CLI-60); `~` is home in navi's file tools (TL-48); every tool call is said in words (CLI-61).
