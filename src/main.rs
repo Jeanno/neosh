@@ -12,10 +12,12 @@ mod fg;
 mod histctl;
 mod histsize;
 mod navi;
+mod plugins;
 mod prompt;
 mod record;
 mod setup;
 mod term;
+mod z;
 
 use std::io::{IsTerminal as _, Write as _};
 use std::path::{Path, PathBuf};
@@ -182,6 +184,10 @@ async fn run(args: Args) -> Result<u8, ShellError> {
         }
     }
     shell.lock().await.load_config(&profile, &rc).await?;
+    // NSH-66: what `plugins=(…)` in the rc names, once the rc has run.
+    if interactive && !args.norc {
+        plugins::load(&mut *shell.lock().await).await;
+    }
 
     if let Some(command) = args.command {
         shell.lock().await.run_dash_c_command(command).await?;
@@ -422,6 +428,8 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
             // NSH-33: zsh's precmd, the status left for the prompt; a PS1 it set counts.
             let mut composed = prompt.prompt.clone();
             if let Some(s) = guard.as_mut() {
+                // NSH-69: the directory, for `z`.
+                z::at_prompt(&**s);
                 if hooks(s, "precmd", &[]) && s.env_str("PS1").as_deref() != Some(prompt::DEFAULT_PS1) {
                     if let Ok(p) = tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(s.compose_prompt())) {
                         composed = p;

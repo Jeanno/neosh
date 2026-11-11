@@ -393,6 +393,43 @@ navi where it is; navi reads it only when the question needs it.
   open a new tab there; and in VS Code's terminal, commands are marked with
   their status as its shell integration expects.
 
+## Plugins
+
+- NSH-66: `plugins=(…)` in `~/.neoshrc` names what to load, in order, once
+  the rc has run: an interactive neosh only, as the rc is. Each entry is
+  one of:
+  - a plugin built into neosh, by its name (`z`, NSH-69);
+  - a path (`~/x`, `/x`, `./x`): a `.sh` or `.bash` file, or a folder,
+    whose `<folder>.plugin.sh`, `<folder>.plugin.bash`, `plugin.sh`,
+    `init.sh` or `<folder>.sh` is sourced;
+  - a git repo: `owner/repo` for GitHub, or a URL (`https://…`, `git@…`,
+    `file://…`).
+  A name loaded twice loads once. `plugins` may also be one word.
+- NSH-67: A repo is cloned (shallow) into `~/.neosh/plugins/<owner>/<repo>`
+  the first time it is named, with a line saying so; it is then sourced
+  as a folder is (NSH-66). It is never fetched again at start: `plugin
+  update` pulls every cloned one. A clone that fails says so in a line and
+  the shell starts without it.
+- NSH-68: A plugin that cannot load (no such built-in name, no such path,
+  a folder with no file to source, an error while sourcing) is said in one
+  line naming the entry; the others still load and the shell starts.
+  `plugin list` shows each loaded plugin and where it came from; `plugin`
+  alone says how to use it.
+- NSH-69: The `z` plugin, built in: each directory the shell is in at a
+  prompt is recorded in `~/.neosh_z` (or the file `_Z_DATA` names), as
+  rupa/z keeps `~/.z` (`path|rank|time`): its rank goes up by one and its
+  time is now. Home and `/` are not recorded. When the ranks add up to
+  more than 9000 each is made 0.99 of itself, and those under 1 go. A
+  missing `~/.neosh_z` starts from `~/.z`, if there is one.
+- NSH-70: `z <words>` goes (as `cd` does, so `OLDPWD` and `cd -` work) to
+  the recorded directory, still there, that matches the words in order
+  with the highest frecency: its rank times 4 if it was last there within
+  the hour, 2 within the day, ½ within the week, ¼ before. Matching is
+  case-sensitive first, then not. A word that is a directory goes there.
+  `z` alone or `z -l [words]` lists the matches, best last, with their
+  scores; `z -x` forgets the current directory. Directories gone are
+  dropped. No match says `z: no directory matches <words>` and fails.
+
 ## Open
 
 - Asking in one terminal about another (a dev server in another tab), and

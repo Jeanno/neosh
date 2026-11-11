@@ -212,6 +212,31 @@ prompt clears once navi has answered.
 - The terminal title shows the directory while waiting and the command while running. The
   directory is reported so new tabs open there, and VS Code's terminal gets command marks.
 
+## Plugins
+
+Name what to load in `~/.neoshrc`, in order:
+
+    plugins=(z ~/my/plugin owner/repo)
+
+- A name built into neosh: `z` (below).
+- A path: a `.sh` file, or a folder whose `<folder>.plugin.sh`, `<folder>.plugin.bash`,
+  `plugin.sh`, `init.sh` or `<folder>.sh` is sourced.
+- A git repo: `owner/repo` for GitHub, or a URL (`https://…`, `git@…`, `file://…`). It is
+  cloned into `~/.neosh/plugins/<owner>/<repo>` the first time, and never fetched again
+  at start; `plugin update` pulls them all, counting from the next neosh.
+- Plugins are bash scripts, so ones written for bash work; ones written in zsh's own
+  language (Oh My Zsh plugins, zsh-autosuggestions) do not.
+- What cannot load is said in a line, and the shell starts without it.
+- `plugin list` shows what loaded and from where.
+
+**z.** `plugins=(z)` records each directory you are in at a prompt (in `~/.neosh_z`,
+or the file `_Z_DATA` names; home and `/` are left out), as rupa/z does, and starts from
+your `~/.z` if you had one.
+- `z <words>` goes to the directory that matches the words in order, the one you use
+  most and most lately (case first matched exactly, then not). `z neo sh` finds
+  `~/Projects/neosh`. `cd -` comes back.
+- `z` or `z -l [words]` lists the matches, best last; `z -x` forgets this directory.
+
 ## Hooks and integrations
 
 - `precmd` and the functions in `precmd_functions` run before each prompt.

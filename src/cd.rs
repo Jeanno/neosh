@@ -10,6 +10,11 @@ use crate::errors::Extensions as SE;
 
 static BRUSH_CD: OnceLock<CommandExecuteFunc<SE>> = OnceLock::new();
 
+/// brush's own `cd`, for a directory already found (`z`, NSH-70).
+pub fn brush_cd() -> Option<CommandExecuteFunc<SE>> {
+    BRUSH_CD.get().copied()
+}
+
 /// Puts neosh's `cd` in place of brush's, which it then calls.
 pub fn install(shell: &mut brush_core::Shell<SE>) {
     if let Some(cd) = shell.builtin_mut("cd") {

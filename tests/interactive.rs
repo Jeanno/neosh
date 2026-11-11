@@ -595,3 +595,41 @@ fn a_question_closed_while_away_is_not_said() {
     assert!(!screen.contains("waits for your answer"), "{screen}");
     assert!(screen.contains("navi is done with ?judged call: ? shows its answer"), "{screen}");
 }
+
+// NSH-66 to NSH-70
+#[test]
+fn plugins_load_from_the_rc_and_z_goes_where_you_have_been() {
+    let home = Home::new("plugins");
+    let h = &home.0;
+    std::fs::create_dir_all(h.join("myplug")).unwrap();
+    std::fs::write(h.join("myplug/myplug.plugin.sh"), "hello_plugin() { echo plugin-says-hi; }\n").unwrap();
+    let repo = h.join("src/srcrepo");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::write(repo.join("srcrepo.plugin.sh"), "repo_fn() { echo from-repo; }\n").unwrap();
+    let git = |args: &[&str]| {
+        let ok = Command::new("git").args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "init.defaultBranch=main"]).args(args).current_dir(&repo).output().unwrap();
+        assert!(ok.status.success(), "{}", String::from_utf8_lossy(&ok.stderr));
+    };
+    git(&["init", "-q"]);
+    git(&["add", "."]);
+    git(&["commit", "-qm", "plugin"]);
+    std::fs::write(h.join(".neoshrc"), format!("plugins=(z ~/myplug nosuch file://{})\n", repo.display())).unwrap();
+    let screen = home.run(
+        &["mkdir -p deep/alpha deep/beta", "cd deep/alpha", "cd ../beta", "cd /", "z alp", "pwd", "z bet", "pwd", "cd -", "z zzz", "hello_plugin", "repo_fn", "plugin list", "exit"],
+        &[],
+    );
+    assert!(screen.contains("installing plugin src/srcrepo"), "{screen}");
+    assert!(screen.contains("plugin nosuch: no such plugin"), "{screen}");
+    let alpha = format!("{}/work/deep/alpha", h.display());
+    let beta = format!("{}/work/deep/beta", h.display());
+    let after_z = screen.split("z alp").nth(1).unwrap_or_default();
+    assert!(after_z.contains(&alpha) && after_z.contains(&beta), "{screen}");
+    assert!(screen.contains("z: no directory matches zzz"), "{screen}");
+    assert!(screen.contains("plugin-says-hi") && screen.contains("from-repo"), "{screen}");
+    assert!(screen.contains("myplug.plugin.sh") && screen.contains("built in"), "{screen}");
+    // Recorded as rupa/z does, home and / left out.
+    let record = std::fs::read_to_string(h.join(".neosh_z")).unwrap();
+    assert!(record.contains(&format!("{alpha}|")) && !record.lines().any(|l| l.starts_with("/|")), "{record}");
+    // Cloned once, where NSH-67 says.
+    assert!(h.join(".neosh/plugins/src/srcrepo/srcrepo.plugin.sh").is_file());
+}
