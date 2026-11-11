@@ -194,6 +194,8 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
         None if steps => Some(pick_plugins(earlier_plugins(&before))),
         None => earlier_plugins(&before),
     };
+    // NSH-79: zsh, asked once, for its look and its PATH.
+    let zsh = if find("zsh").is_some() { ask_zsh() } else { Err("zsh is not installed, so there is no zsh look to copy".to_string()) };
     // NSH-49
     let mut lines = match look {
         // NSH-74: the parts, unless they are the default ones.
@@ -218,13 +220,19 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
             lines
         }
         Look::Zsh => {
-            let (lines, notes) = zsh_look();
+            let (lines, notes) = zsh_look(&zsh);
             for note in notes {
                 println!("{}", dim(&format!("· {note}")));
             }
             lines
         }
     };
+    // NSH-79: the folders zsh puts on PATH, first, so what follows finds them.
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    if let Some(line) = zsh.as_ref().ok().and_then(|z| path_line(&z.path, &system_path(), home.as_deref(), |d| Path::new(d).is_dir())) {
+        println!("{}", dim("· The folders your zsh adds to PATH are added for neosh too."));
+        lines.insert(usize::from(look == Look::Neosh && lines.first().is_some_and(|l| l == OWN_LOOK)), line);
+    }
     if let Some(names) = plugins.filter(|p| !p.is_empty()) {
         lines.push(format!("plugins=({})", names.join(" ")));
     }
@@ -617,6 +625,8 @@ pub struct Zsh {
     pub p10k: bool,
     pub prompt_subst: bool,
     pub colors: Vec<(&'static str, String)>,
+    /// NSH-79: zsh's PATH, as a login zsh makes it.
+    pub path: String,
 }
 
 const SENTINEL: &str = "neosh-setup-look";
@@ -626,11 +636,14 @@ const COLOR_VARS: [&str; 3] = ["CLICOLOR", "LSCOLORS", "LS_COLORS"];
 fn ask_zsh() -> Result<Zsh, String> {
     let zsh = find("zsh").ok_or("zsh is not installed, so there is no zsh look to copy")?;
     let script = format!(
-        "print -rN -- {SENTINEL} \"$PROMPT\" \"$RPROMPT\" \"${{ZSH_THEME-}}\" \"${{+functions[starship_precmd]}}\" \"${{+functions[p10k]}}\" \"${{options[promptsubst]}}\" {}",
+        "print -rN -- {SENTINEL} \"$PROMPT\" \"$RPROMPT\" \"${{ZSH_THEME-}}\" \"${{+functions[starship_precmd]}}\" \"${{+functions[p10k]}}\" \"${{options[promptsubst]}}\" \"$PATH\" {}",
         COLOR_VARS.iter().map(|v| format!("\"${{{v}-}}\"")).collect::<Vec<_>>().join(" ")
     );
     let mut child = Command::new(zsh)
-        .args(["-i", "-c", &script])
+        // NSH-79: a login zsh, from the system's PATH, so the PATH it
+        // makes is its own and not the one setup was started with.
+        .args(["-l", "-i", "-c", &script])
+        .env("PATH", system_path().join(":"))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -660,16 +673,64 @@ pub fn parse_zsh(out: &str) -> Option<Zsh> {
         starship: field(3) == "1",
         p10k: field(4) == "1",
         prompt_subst: field(5) == "on",
-        colors: COLOR_VARS.iter().enumerate().map(|(i, v)| (*v, field(6 + i))).filter(|(_, value)| !value.is_empty()).collect(),
+        path: field(6),
+        colors: COLOR_VARS.iter().enumerate().map(|(i, v)| (*v, field(7 + i))).filter(|(_, value)| !value.is_empty()).collect(),
     })
 }
 
 /// NSH-49: the lines for `~/.neoshrc` and what to say about them.
-fn zsh_look() -> (Vec<String>, Vec<String>) {
-    match ask_zsh() {
-        Ok(zsh) => lines_for(&zsh, find("starship").is_some()),
+fn zsh_look(zsh: &Result<Zsh, String>) -> (Vec<String>, Vec<String>) {
+    match zsh {
+        Ok(zsh) => lines_for(zsh, find("starship").is_some()),
         Err(why) => (Vec::new(), vec![format!("{why}; neosh's own look is kept.")]),
     }
+}
+
+/// NSH-79: the PATH a login shell starts from: `/etc/paths` and
+/// `/etc/paths.d` (macOS's path_helper), else the usual folders.
+fn system_path() -> Vec<String> {
+    let mut dirs: Vec<String> = Vec::new();
+    let mut files = vec![PathBuf::from("/etc/paths")];
+    let mut more: Vec<PathBuf> = std::fs::read_dir("/etc/paths.d").into_iter().flatten().flatten().map(|e| e.path()).collect();
+    more.sort();
+    files.extend(more);
+    for file in files {
+        for line in std::fs::read_to_string(file).unwrap_or_default().lines().map(str::trim) {
+            if !line.is_empty() && !line.starts_with('#') && !dirs.iter().any(|d| d == line) {
+                dirs.push(line.to_string());
+            }
+        }
+    }
+    if dirs.is_empty() {
+        dirs = ["/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin"].map(String::from).to_vec();
+    }
+    dirs
+}
+
+/// NSH-79: the line that adds the folders zsh puts on PATH and a login
+/// neosh would not have, each once; `None` when there are none.
+pub fn path_line(zsh_path: &str, system: &[String], home: Option<&Path>, exists: impl Fn(&str) -> bool) -> Option<String> {
+    let mut dirs: Vec<String> = Vec::new();
+    for dir in zsh_path.split(':').filter(|d| d.starts_with('/')) {
+        if !system.iter().any(|s| s == dir) && !dirs.iter().any(|d| d == dir) && exists(dir) {
+            dirs.push(dir.to_string());
+        }
+    }
+    if dirs.is_empty() {
+        return None;
+    }
+    let home = home.map(|h| h.display().to_string());
+    let words: Vec<String> = dirs
+        .iter()
+        .map(|d| match home.as_deref().and_then(|h| d.strip_prefix(h)).filter(|r| r.starts_with('/')) {
+            Some(rest) => format!("\"$HOME\"{}", quote(rest)),
+            None => quote(d),
+        })
+        .collect();
+    Some(format!(
+        "for d in {}; do case \":$PATH:\" in *\":$d:\"*) ;; *) PATH=\"$PATH:$d\" ;; esac; done; export PATH",
+        words.join(" ")
+    ))
 }
 
 /// The lines and notes for what zsh said; `starship` is whether neosh can run it.
@@ -679,7 +740,7 @@ pub fn lines_for(zsh: &Zsh, starship: bool) -> (Vec<String>, Vec<String>) {
     let keep = "neosh's own prompt is kept, which shows the git branch and a failed status";
     if zsh.starship {
         if starship {
-            lines.push("eval \"$(starship init bash)\"".to_string());
+            lines.push(STARSHIP_INIT.to_string());
             notes.push("zsh's prompt is starship's: neosh uses starship too, so it looks the same.".into());
         } else {
             notes.push(format!("zsh's prompt is starship's, but starship is not on neosh's PATH; {keep}."));
@@ -855,14 +916,15 @@ mod tests {
     // NSH-49
     #[test]
     fn what_zsh_said_becomes_lines_and_notes() {
-        let zsh = parse_zsh(&format!("hello from zshrc\n{SENTINEL}\0%n %~ %# \0%T\0\00\00\0off\01\0Gxfx\0\0")).unwrap();
+        let zsh = parse_zsh(&format!("hello from zshrc\n{SENTINEL}\0%n %~ %# \0%T\0\00\00\0off\0/usr/bin:/h/bin\01\0Gxfx\0\0")).unwrap();
         assert_eq!(zsh.prompt, "%n %~ %# ");
+        assert_eq!(zsh.path, "/usr/bin:/h/bin");
         assert_eq!(zsh.colors, vec![("CLICOLOR", "1".to_string()), ("LSCOLORS", "Gxfx".to_string())]);
         let (lines, notes) = lines_for(&zsh, false);
         assert_eq!(lines, vec![r"PS1='\u \w \$ '", "export CLICOLOR='1'", "export LSCOLORS='Gxfx'"]);
         assert!(notes[0].contains("RPROMPT"), "{notes:?}");
         let starship = Zsh { starship: true, ..Zsh::default() };
-        assert_eq!(lines_for(&starship, true).0, vec!["eval \"$(starship init bash)\""]);
+        assert_eq!(lines_for(&starship, true).0, vec![STARSHIP_INIT]);
         assert!(lines_for(&starship, false).0.is_empty());
         let omz = Zsh { prompt: "$(git_prompt_info)%~".into(), prompt_subst: true, theme: "robbyrussell".into(), ..Zsh::default() };
         let (lines, notes) = lines_for(&omz, false);
@@ -885,6 +947,16 @@ mod tests {
     }
 
     // NSH-51
+    // NSH-79
+    #[test]
+    fn the_folders_zsh_adds_are_put_on_path_once() {
+        let system: Vec<String> = ["/usr/bin", "/bin"].map(String::from).to_vec();
+        let home = Path::new("/h");
+        let line = path_line("/usr/bin:/h/.local/bin:/bin:/opt/x y/bin:/h/.local/bin:/gone:rel", &system, Some(home), |d| d != "/gone").unwrap();
+        assert_eq!(line, "for d in \"$HOME\"'/.local/bin' '/opt/x y/bin'; do case \":$PATH:\" in *\":$d:\"*) ;; *) PATH=\"$PATH:$d\" ;; esac; done; export PATH");
+        assert_eq!(path_line("/usr/bin:/bin", &system, Some(home), |_| true), None);
+    }
+
     #[test]
     fn setup_options() {
         let args = |a: &[&str]| parse(&a.iter().map(|s| s.to_string()).collect::<Vec<_>>());

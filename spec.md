@@ -165,6 +165,15 @@ hands a line to another shell. What neosh adds is below.
   it starts from what an earlier setup chose. `--setup --plugins '<names>'`
   chooses them without questions (`''` for none); a name neosh does not
   know says so, naming those it knows, and exits 2.
+- NSH-79: Setup copies the folders your zsh puts on `PATH`, so a neosh
+  started as a login shell (which reads `/etc/profile` and `~/.profile`,
+  not zsh's files) finds what zsh finds, navi in `~/.local/bin` among
+  them. It asks a login zsh for its `PATH` (from the system's `PATH`, as
+  NSH-49 asks for its look), and writes in the setup block, before the
+  prompt lines, a line adding each folder that is there and is not one of
+  the system's (`/etc/paths`, `/etc/paths.d`), each only when `PATH` does
+  not have it already, so a neosh started from another has it once.
+  Every setup writes it afresh; with no zsh, or no such folders, none.
 
 ## The language
 

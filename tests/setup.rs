@@ -180,3 +180,26 @@ fn plugins_are_chosen_without_questions_and_kept_when_not_asked() {
     assert!(String::from_utf8_lossy(&own.stdout).contains("names its own plugins"), "{own:?}");
     assert!(!home.rc().contains("plugins=(z)"), "{}", home.rc());
 }
+
+// NSH-79: a login neosh gets the folders zsh puts on PATH, each once.
+#[test]
+fn the_folders_zsh_adds_to_path_are_written_for_neosh() {
+    if !std::path::Path::new("/bin/zsh").exists() {
+        return;
+    }
+    let home = Home::new("zshpath");
+    std::fs::create_dir_all(home.0.join("tools/bin")).unwrap();
+    std::fs::write(home.0.join("tools/bin/mytool"), "#!/bin/sh\necho mytool-ran\n").unwrap();
+    let mut perms = std::fs::metadata(home.0.join("tools/bin/mytool")).unwrap().permissions();
+    std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o755);
+    std::fs::set_permissions(home.0.join("tools/bin/mytool"), perms).unwrap();
+    std::fs::write(home.0.join(".zprofile"), "path+=($HOME/tools/bin /not/there)\n").unwrap();
+    let out = home.neosh(&["--setup", "--look", "neosh", "--yes"]);
+    assert!(out.status.success(), "{out:?}");
+    let rc = home.rc();
+    assert!(rc.contains("for d in \"$HOME\"'/tools/bin'; do"), "{rc}");
+    assert!(!rc.contains("/not/there"), "{rc}");
+    // Read twice, as a nested neosh would: on PATH once, and it runs.
+    let run = home.neosh(&["-c", "source ~/.neoshrc; source ~/.neoshrc; mytool; echo \"$PATH\" | tr : '\\n' | grep -c tools/bin"]);
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "mytool-ran\n1\n", "{run:?}");
+}

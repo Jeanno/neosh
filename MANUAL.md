@@ -69,6 +69,8 @@ navi's manual, `navi setup` and `navi usage`. This manual covers the shell.
 - Step 2 of 3, plugins: offers each plugin neosh knows by name (today `z`), yes by
   default, written as `plugins=(z)`. If your `~/.neoshrc` names plugins itself, outside
   the markers, setup leaves them alone.
+- Setup also copies the folders your zsh adds to `PATH` (from `~/.zprofile`, `~/.zshrc`),
+  so neosh as your login shell finds the same commands, navi included.
 - Step 3 of 3, the model: runs `navi setup` to choose the model that answers `?`. With no
   `navi` on `$PATH`, it says how to install navi and goes on.
 - What setup would write is shown first and written only on yes.
@@ -311,13 +313,19 @@ commands; they ask for your password:
 
     echo ~/.local/bin/neosh | sudo tee -a /etc/shells && chsh -s ~/.local/bin/neosh
 
-(Use the full path where neosh is installed.) As a login shell, neosh reads `~/.profile`
-first.
+(Use the full path where neosh is installed.) As a login shell, neosh reads `/etc/profile`
+and `~/.profile` first, not zsh's `~/.zprofile` or `~/.zshrc`; `neosh --setup` copies the
+`PATH` folders zsh adds, so run it (again) after switching.
+
+A terminal that is already open keeps starting the shell it started with: macOS gives apps
+the new login shell after you log out and back in. (Ghostty, iTerm and others can also be
+told to run neosh in their own settings.)
 
 ## Troubleshooting and common questions
 
 **`?` says navi is not installed.** Install navi and make sure `navi` is on your `$PATH`.
-The line runs nothing and its status is 127.
+The line runs nothing and its status is 127. Found from zsh but not from a login neosh?
+Run `neosh --setup`, which copies zsh's `PATH` folders.
 
 **navi has no model / nothing answers.** Run `navi setup` (or `neosh --setup`, whose last
 step runs it).
