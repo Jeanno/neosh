@@ -39,8 +39,8 @@ builds the code you have.
 
 [navi](https://github.com/Jeanno/neoai#navi-in-the-terminal), which needs
 Node 22 or newer, is put beside it when it isn't there yet
-(`NEOSH_INSTALL_NAVI=no` leaves it out). Run the installer again to update,
-or add `-s -- --uninstall` to remove neosh. Then type `neosh`. At the end
+(`NEOSH_INSTALL_NAVI=no` leaves it out). Run the installer again to update;
+`uninstall.sh` (same URL) removes neosh, changing your login shell back first. Then type `neosh`. At the end
 it asks whether neosh should be your login shell (no unless you say yes).
 
 The first start offers setup (`neosh --setup` any time): how the prompt

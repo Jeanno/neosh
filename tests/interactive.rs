@@ -38,11 +38,24 @@ impl Home {
 
     /// What the screen showed for these lines, typed into a fresh neosh.
     fn run(&self, lines: &[&str], env: &[(&str, &str)]) -> String {
+        self.run_as(env!("CARGO_BIN_EXE_neosh"), lines, env)
+    }
+
+    /// As a terminal starts a login shell: named `-neosh`.
+    fn run_login(&self, lines: &[&str], env: &[(&str, &str)]) -> String {
+        let wrapper = self.0.join("as-login");
+        std::fs::write(&wrapper, format!("#!/bin/bash\nexec -a -neosh {} \"$@\"\n", env!("CARGO_BIN_EXE_neosh"))).unwrap();
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+        self.run_as(&wrapper.display().to_string(), lines, env)
+    }
+
+    fn run_as(&self, program: &str, lines: &[&str], env: &[(&str, &str)]) -> String {
         let driver = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/drive.py");
         let out = Command::new("python3")
             .arg("-I")
             .arg(driver)
-            .arg(env!("CARGO_BIN_EXE_neosh"))
+            .arg(program)
             .args(lines)
             .current_dir(self.0.join("work"))
             .env_clear()
@@ -722,4 +735,16 @@ fn the_system_s_prompt_and_startup_status_are_not_shown() {
     let screen = home.run(&["echo hi", "exit"], &[]);
     assert!(screen.contains("work $ echo hi"), "{screen}");
     assert!(!screen.contains("work 1 $"), "{screen}");
+}
+
+// NSH-1: a terminal starts neosh as a login shell; ~/.neoshrc still runs,
+// after the profile.
+#[test]
+fn a_login_neosh_reads_the_profile_then_the_rc() {
+    let home = Home::new("loginrc");
+    std::fs::write(home.0.join(".profile"), "ORDER=profile\n").unwrap();
+    std::fs::write(home.0.join(".neoshrc"), "ORDER=\"$ORDER,rc\"\nalias hi='echo from-the-rc'\n").unwrap();
+    let screen = home.run_login(&["echo \"order=$ORDER\"", "hi", "exit"], &[]);
+    assert!(screen.contains("\norder=profile,rc"), "{screen}");
+    assert!(screen.contains("\nfrom-the-rc"), "{screen}");
 }

@@ -170,10 +170,10 @@ async fn run(args: Args) -> Result<u8, ShellError> {
     let shell: ShellRef<errors::Extensions> = std::sync::Arc::new(tokio::sync::Mutex::new(shell));
 
     // NSH-1: ~/.profile for a login shell, ~/.neoshrc for an interactive one.
-    let rc = std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".neoshrc"));
-    let rc = match rc {
-        Some(path) if interactive && !args.norc && path.exists() => brush_core::RcLoadBehavior::LoadCustom(path),
-        _ => brush_core::RcLoadBehavior::Skip,
+    let rc_path = std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".neoshrc")).filter(|p| interactive && !args.norc && p.exists());
+    let rc = match rc_path.clone() {
+        Some(path) => brush_core::RcLoadBehavior::LoadCustom(path),
+        None => brush_core::RcLoadBehavior::Skip,
     };
     let profile = if args.login { brush_core::ProfileLoadBehavior::LoadDefault } else { brush_core::ProfileLoadBehavior::Skip };
     // NSH-5: ^C is for what runs, navi included, never the shell itself. A
@@ -196,6 +196,15 @@ async fn run(args: Args) -> Result<u8, ShellError> {
         }
     }
     shell.lock().await.load_config(&profile, &rc).await?;
+    // NSH-1: a terminal starts neosh as a login shell, which bash's rules give
+    // only the profile; ~/.neoshrc runs after it, as zsh runs ~/.zshrc.
+    if let (true, Some(path)) = (args.login, &rc_path) {
+        let mut s = shell.lock().await;
+        let params = s.default_exec_params();
+        if let Err(e) = s.source_script(path, std::iter::empty::<String>(), &params).await {
+            eprintln!("neosh: {}: {e}", path.display());
+        }
+    }
     // NSH-82: macOS's /etc/bashrc, which /etc/profile reads for any shell
     // with $BASH, sets a prompt of its own; neosh's is kept.
     if interactive && inherited.is_none() {

@@ -23,9 +23,14 @@ navi's manual, `navi setup` and `navi usage`. This manual covers the shell.
   elsewhere).
 - A build from source takes a minute or two the first time.
 - Update: run the installer again.
-- Uninstall: `./install.sh --uninstall`, or add `-s -- --uninstall` to the curl line
-  (`… | sh -s -- --uninstall`). It removes only the `neosh` program and keeps your history
-  (`~/.neosh_history`) and `~/.neoshrc`.
+- Uninstall: `./uninstall.sh`, or
+  `curl -fsSL https://raw.githubusercontent.com/Jeanno/neosh/main/uninstall.sh | sh`.
+  If neosh is your login shell, it changes it back first (to `/bin/zsh` on macOS,
+  `/bin/bash` elsewhere, or `NEOSH_SHELL_BACK`); it stops there if you say no, so no terminal
+  is left without a shell. Then it removes neosh and asks whether to move your settings,
+  history and plugins (`~/.neoshrc`, `~/.neosh_history`, `~/.neosh`) to
+  `~/neosh-uninstalled-<time>`, so a new install starts fresh, and whether to remove navi.
+  `--yes` answers yes to all. `./install.sh --uninstall` removes only the program.
 - It replaces or removes only a neosh: if `~/.local/bin/neosh` is something else, it stops.
 - If `~/.local/bin` is not on your `PATH`, the installer says to add
   `export PATH="$HOME/.local/bin:$PATH"` to your shell's startup file.

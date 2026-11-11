@@ -18,7 +18,10 @@ hands a line to another shell. What neosh adds is below.
   is one, then prompts. `neosh -c '<commands>' [name [args…]]` runs the
   commands and exits with the last one's status; `neosh <file> [args…]` runs
   a script; with stdin not a terminal it reads commands from stdin. `-l`, or
-  being started as `-neosh` (as a login shell is), reads `~/.profile` first.
+  being started as `-neosh` (as a login shell is, by every terminal),
+  reads `/etc/profile` and `~/.profile` first, then `~/.neoshrc` when
+  interactive (where bash's login shell reads no rc), as zsh reads
+  `~/.zshrc`.
 - NSH-2: The exit status is the last command's, and `exit [n]` leaves with
   n. `--version` and `--help` say what neosh is and how to start it. A
   script that is not there says so as bash does (`neosh: x.sh: No such file
@@ -177,6 +180,18 @@ hands a line to another shell. What neosh adds is below.
   neosh's own, unless the environment brought a `PS1`; and the first prompt
   shows no failed status from the startup files (`/etc/bashrc` ends on a
   failed test in any terminal but Terminal.app).
+- NSH-83: `uninstall.sh` (in the repo, and piped from curl) undoes the
+  install and setup, in an order that never leaves a terminal without a
+  shell: neosh as the login shell is changed back first (`chsh -s` to
+  `NEOSH_SHELL_BACK`, else `/bin/zsh` on macOS and `/bin/bash` elsewhere,
+  and launchd told as NSH-80 does), and if that is declined or fails
+  nothing is removed. Then neosh in the install directory (only a neosh,
+  as NSH-14) and the clone it was built from; then, asked, `~/.neoshrc`,
+  `~/.neosh_history` and `~/.neosh` are moved to
+  `~/neosh-uninstalled-<time>` (not deleted), and navi beside neosh is
+  removed. Questions are asked on the terminal; without one the answer is
+  no; `--yes` answers yes. `/etc/shells`, starship and `~/.neoai` are left,
+  and said so.
 
 ## The language
 

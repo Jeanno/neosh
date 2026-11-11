@@ -29,6 +29,10 @@ jobs:
           "$RUNNER_TEMP/bin/neosh" -c 'test "$((6 * 7))" = 42'
           NEOSH_BIN_DIR="$RUNNER_TEMP/bin" ./install.sh --uninstall
           test ! -e "$RUNNER_TEMP/bin/neosh"
+          # NSH-83: the runner's login shell is not neosh; no terminal, so nothing else goes.
+          NEOSH_INSTALL_NAVI=no NEOSH_BIN_DIR="$RUNNER_TEMP/bin" ./install.sh
+          NEOSH_BIN_DIR="$RUNNER_TEMP/bin" ./uninstall.sh
+          test ! -e "$RUNNER_TEMP/bin/neosh"
 
       # Piped from curl, it installs a release's neosh after checking its
       # sha256 (NSH-64): here a release made on the spot, as release.yml makes one.
