@@ -216,7 +216,15 @@ prompt clears once navi has answered.
 
       NEOSH_PROMPT='user host folder branch time'
 
-  Or without questions: `neosh --setup --prompt 'folder branch time' --yes`.
+  Colours come next, typed as `part=colour` (`dir=green branch=bright-yellow,bold
+  time=#888888`), shown as you type; `none` for none. They are saved as
+  `NEOSH_PROMPT_COLORS`.
+
+  Or without questions: `neosh --setup --prompt 'folder branch time' --colors 'dir=green' --yes`.
+- For themes and icons, choose starship in `neosh --setup` (choice 4). You pick one of
+  its presets (tokyo-night, gruvbox-rainbow, pure…), seeing each as it will look, and
+  it is saved as your `~/.config/starship.toml` (the old one kept as `.bak`). Most
+  presets need a Nerd Font. Without questions: `neosh --setup --preset tokyo-night --yes`.
 - Set `PS1` in `~/.neoshrc` (or the environment) to use your own prompt. A zsh prompt
   exported from zsh (powerlevel10k's, say) is not used, since bash cannot show it.
 - The terminal title shows the directory while waiting and the command while running. The

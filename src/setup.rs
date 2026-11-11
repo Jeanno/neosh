@@ -17,7 +17,12 @@ const INSTALL_NAVI: &str = "curl -fsSL https://raw.githubusercontent.com/Jeanno/
 pub enum Look {
     Neosh,
     Zsh,
+    /// NSH-77: starship's prompt.
+    Starship,
 }
+
+/// NSH-77: the line that makes starship neosh's prompt.
+const STARSHIP_INIT: &str = "eval \"$(starship init bash)\"";
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Options {
@@ -27,6 +32,10 @@ pub struct Options {
     pub at_start: bool,
     /// NSH-75: the parts of neosh's own prompt, from `--prompt`.
     pub parts: Option<String>,
+    /// NSH-76: their colours, from `--colors`.
+    pub colors: Option<String>,
+    /// NSH-77: starship's preset, from `--preset`.
+    pub preset: Option<String>,
 }
 
 /// NSH-51: what follows `--setup`.
@@ -40,7 +49,8 @@ pub fn parse(args: &[String]) -> Result<Options, String> {
                 options.look = Some(match args.next().map(String::as_str) {
                     Some("zsh") => Look::Zsh,
                     Some("neosh") => Look::Neosh,
-                    other => return Err(format!("--look takes zsh or neosh, not {}", other.unwrap_or("nothing"))),
+                    Some("starship") => Look::Starship,
+                    other => return Err(format!("--look takes zsh, neosh or starship, not {}", other.unwrap_or("nothing"))),
                 })
             }
             // NSH-75: neosh's own look, with these parts.
@@ -53,6 +63,20 @@ pub fn parse(args: &[String]) -> Result<Options, String> {
                 }
                 options.parts = Some(shown.join(" "));
                 options.look = Some(Look::Neosh);
+            }
+            // NSH-76
+            "--colors" => {
+                let words = args.next().ok_or("--colors takes part=colour words, as 'dir=green branch=yellow'")?;
+                if let Some(word) = crate::prompt::colors(Some(words)).1.first() {
+                    return Err(format!("--colors: {word} is not part=colour (a colour is a name, bright-<name>, 0-255, #rrggbb, bold, dim, italic, underline or none)"));
+                }
+                options.colors = Some(words.to_string());
+                options.look = Some(Look::Neosh);
+            }
+            // NSH-77
+            "--preset" => {
+                options.preset = Some(args.next().ok_or("--preset takes one of starship's presets, as tokyo-night")?.to_string());
+                options.look = Some(Look::Starship);
             }
             other => return Err(format!("unknown option {other} for --setup")),
         }
@@ -85,7 +109,7 @@ const OWN_LOOK: &str = "# neosh's own look; `neosh --setup` changes it.";
 pub fn run(options: &Options, rc: &Path) -> i32 {
     let terminal = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
     if !terminal && !(options.look.is_some() && options.yes) {
-        eprintln!("neosh: --setup asks its questions on a terminal; without one, give --look zsh|neosh (or --prompt '<parts>') and --yes");
+        eprintln!("neosh: --setup asks its questions on a terminal; without one, give --look zsh|neosh|starship (or --prompt '<parts>') and --yes");
         return 1;
     }
     // NSH-48: the model navi answers with, by navi's own setup.
@@ -101,25 +125,61 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
         println!("\n{}", bold("Step 2 of 2 · How the prompt looks"));
         println!("  1  neosh's own  {}", dim("the directory, git branch and a failed status"));
         println!("  2  like my zsh  {}", dim("its prompt and colours"));
-        println!("  3  my own       {}", dim("neosh's, with the parts you pick"));
+        println!("  3  my own       {}", dim("neosh's, with the parts and colours you pick"));
+        println!("  4  starship     {}", dim("themes and icons, drawn by starship"));
     }
     let mut parts = options.parts.clone();
+    let mut colors = options.colors.clone();
+    let mut preset = options.preset.clone();
     let look = options.look.unwrap_or_else(|| match ask("Choose [1]: ").as_str() {
         "2" => Look::Zsh,
         "3" => {
             let before = std::fs::read_to_string(rc).unwrap_or_default();
-            parts = Some(pick(&parts_in(&before), terminal));
+            let picked = pick(&setting_in(&before, "NEOSH_PROMPT").unwrap_or_else(|| crate::prompt::DEFAULT_PARTS.into()), terminal);
+            colors = pick_colors(&picked, setting_in(&before, "NEOSH_PROMPT_COLORS"), terminal);
+            parts = Some(picked);
             Look::Neosh
+        }
+        "4" => {
+            if let Some(bin) = find("starship") {
+                preset = pick_preset(&bin, terminal);
+            }
+            Look::Starship
         }
         _ => Look::Neosh,
     });
+    // NSH-77: starship, and the preset that becomes its config.
+    let starship = if look == Look::Starship {
+        let Some(bin) = find("starship") else {
+            println!("starship draws this prompt and is not installed. Install it, then run neosh --setup again:");
+            println!("  brew install starship\n  {}", dim("or: curl -sS https://starship.rs/install.sh | sh"));
+            return if options.yes { 1 } else { 0 };
+        };
+        if let Some(name) = &preset {
+            if !presets(&bin).contains(name) {
+                eprintln!("neosh: {name} is not one of starship's presets ({})", presets(&bin).join(", "));
+                return 2;
+            }
+        }
+        Some(bin)
+    } else {
+        None
+    };
     // NSH-49
     let lines = match look {
         // NSH-74: the parts, unless they are the default ones.
-        Look::Neosh => match parts.filter(|p| p != crate::prompt::DEFAULT_PARTS) {
-            Some(p) => vec![OWN_LOOK.to_string(), format!("NEOSH_PROMPT={}", quote(&p))],
-            None => vec![OWN_LOOK.to_string()],
-        },
+        Look::Neosh => {
+            let mut lines = vec![OWN_LOOK.to_string()];
+            if let Some(p) = parts.filter(|p| p != crate::prompt::DEFAULT_PARTS) {
+                lines.push(format!("NEOSH_PROMPT={}", quote(&p)));
+            }
+            // NSH-76: the colours, unless they are the default ones.
+            if let Some(c) = colors.filter(|c| !c.trim().is_empty()) {
+                lines.push(format!("NEOSH_PROMPT_COLORS={}", quote(c.trim())));
+            }
+            lines
+        }
+        Look::Starship => vec![STARSHIP_INIT.to_string()],
         Look::Zsh => {
             let (lines, notes) = zsh_look();
             for note in notes {
@@ -133,14 +193,20 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
     let before = std::fs::read_to_string(rc).unwrap_or_default();
     let after = with_block(&before, &lines);
     let earlier = block(&before).is_some_and(|b| b.iter().any(|l| l.trim() != OWN_LOOK && !l.trim().is_empty()));
-    if after == before {
+    // NSH-77: the preset goes in starship's config, the one before kept beside it.
+    let config = starship.as_ref().and(preset.as_ref()).map(|name| (name.clone(), starship_config()));
+    if let Some((name, path)) = &config {
+        let kept = if path.exists() { format!(" (the one there now is kept as {}.bak)", tilde(path)) } else { String::new() };
+        println!("{} becomes starship's preset {name}{kept}.", tilde(path));
+    }
+    if after == before && config.is_none() {
         println!("{}", dim(&format!("· {} already has this look.", tilde(rc))));
     } else {
         let custom = lines.len() > 1;
-        let asking = !options.yes && (look == Look::Zsh || custom || earlier);
+        let asking = !options.yes && (look != Look::Neosh || custom || earlier);
         if look == Look::Neosh && earlier && !custom {
             println!("neosh's own look: the lines an earlier setup wrote in {} go.", tilde(rc));
-        } else if look == Look::Zsh || custom {
+        } else if (look != Look::Neosh || custom) && after != before {
             println!("This goes in {}:\n", tilde(rc));
             for line in &lines {
                 println!("  {line}");
@@ -151,11 +217,20 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
             println!("Nothing written.");
             return 0;
         }
-        if let Err(e) = std::fs::write(rc, after) {
-            eprintln!("neosh: could not write {}: {e}", rc.display());
-            return 1;
+        if after != before {
+            if let Err(e) = std::fs::write(rc, after) {
+                eprintln!("neosh: could not write {}: {e}", rc.display());
+                return 1;
+            }
+            println!("{}", dim(&format!("· Saved in {}.", tilde(rc))));
         }
-        println!("{}", dim(&format!("· Saved in {}.", tilde(rc))));
+        if let (Some(bin), Some((name, path))) = (&starship, &config) {
+            if let Err(e) = write_preset(bin, name, path) {
+                eprintln!("neosh: could not write {}: {e}", path.display());
+                return 1;
+            }
+            println!("{}", dim(&format!("· Saved starship's preset {name} in {}.", tilde(path))));
+        }
     }
     if terminal {
         println!("\n{}", bold("neosh is ready."));
@@ -170,25 +245,17 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
     0
 }
 
-/// NSH-74: the parts an earlier setup chose, from its `NEOSH_PROMPT=` line.
-fn parts_in(rc: &str) -> String {
-    block(rc)
-        .and_then(|lines| lines.iter().find_map(|l| l.trim().strip_prefix("NEOSH_PROMPT=")))
-        .map(|v| v.trim_matches(['\'', '"']).to_string())
-        .unwrap_or_else(|| crate::prompt::DEFAULT_PARTS.to_string())
+/// NSH-74: what an earlier setup set `name` to, from its `name=` line.
+fn setting_in(rc: &str, name: &str) -> Option<String> {
+    let prefix = format!("{name}=");
+    block(rc)?.iter().find_map(|l| l.trim().strip_prefix(prefix.as_str())).map(|v| v.trim_matches(['\'', '"']).to_string())
 }
 
 /// NSH-74: the parts of neosh's own prompt, picked by number with the prompt
 /// shown as it would be after each change; the parts picked.
 fn pick(start: &str, terminal: bool) -> String {
-    use crate::prompt::{PARTS, Parts, branch, clock, render, shown};
+    use crate::prompt::{PARTS, shown};
     let mut on: Vec<&str> = shown(Some(start)).0;
-    let dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
-    let home = std::env::var_os("HOME").map(PathBuf::from);
-    let user = std::env::var("USER").unwrap_or_else(|_| "you".into());
-    let host = hostname();
-    let time = clock();
-    let color = terminal && std::env::var_os("NO_COLOR").is_none();
     println!("\nType numbers to switch parts on or off ({}), Enter when done.", dim("as 4 8"));
     loop {
         for (i, (part, what)) in PARTS.iter().enumerate() {
@@ -196,20 +263,7 @@ fn pick(start: &str, terminal: bool) -> String {
             println!("  {:>2} {mark} {part:<8} {}", i + 1, dim(what));
         }
         let show: Vec<&str> = PARTS.iter().map(|(p, _)| *p).filter(|p| on.contains(p)).collect();
-        let preview = render(&Parts {
-            show: &show,
-            user: &user,
-            host: &host,
-            clock: &time,
-            dir: &dir,
-            home: home.as_deref(),
-            branch: Some(branch(&dir).unwrap_or_else(|| "main".into())),
-            changed: false,
-            status: 1,
-            took: Some(std::time::Duration::from_secs(12)),
-            root: false,
-            color,
-        });
+        let preview = preview(&show, None, terminal);
         println!("\n  {}\n{preview}\n", dim("After a command that failed and took 12s:"));
         let answer = ask("Switch [Enter: done]: ");
         if answer.is_empty() {
@@ -232,6 +286,151 @@ fn pick(start: &str, terminal: bool) -> String {
             }
         }
     }
+}
+
+/// NSH-74: neosh's own prompt with these parts and colours, as after a
+/// command that failed and took 12s, in the directory setup runs in.
+fn preview(show: &[&str], colors: Option<&str>, terminal: bool) -> String {
+    use crate::prompt::{Parts, branch, clock, render};
+    let dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let user = std::env::var("USER").unwrap_or_else(|_| "you".into());
+    render(&Parts {
+        show,
+        user: &user,
+        host: &hostname(),
+        clock: &clock(),
+        colors: &crate::prompt::colors(colors).0,
+        dir: &dir,
+        home: home.as_deref(),
+        branch: Some(branch(&dir).unwrap_or_else(|| "main".into())),
+        changed: false,
+        status: 1,
+        took: Some(std::time::Duration::from_secs(12)),
+        root: false,
+        color: terminal && std::env::var_os("NO_COLOR").is_none(),
+    })
+}
+
+/// NSH-76: the colours of the parts picked, typed as `part=colour` with the
+/// prompt shown again each time; `None` keeps neosh's.
+fn pick_colors(parts: &str, start: Option<String>, terminal: bool) -> Option<String> {
+    let show: Vec<&str> = parts.split_whitespace().collect();
+    let mut colors = start;
+    println!(
+        "\nColours: type part=colour to change one ({}), none for no colours, default for neosh's; Enter when done.",
+        dim("as dir=green branch=bright-yellow,bold time=#888888")
+    );
+    loop {
+        println!("\n{}\n", preview(&show, colors.as_deref(), terminal));
+        let answer = ask("Colours [Enter: done]: ");
+        match answer.as_str() {
+            "" => return colors,
+            "default" => colors = None,
+            "none" => colors = Some("none".into()),
+            _ => {
+                let (_, wrong) = crate::prompt::colors(Some(&answer));
+                if let Some(word) = wrong.first() {
+                    println!("{}", dim(&format!("· {word} is not part=colour: a colour is a name, bright-<name>, 0-255, #rrggbb, bold, dim, italic, underline or none")));
+                    continue;
+                }
+                // Later words win over earlier ones for the same part.
+                let mut all: Vec<String> = colors.filter(|c| c != "none").map(|c| c.split_whitespace().map(String::from).collect()).unwrap_or_default();
+                for word in answer.split_whitespace() {
+                    let part = word.split('=').next().unwrap_or_default();
+                    all.retain(|w| w.split('=').next() != Some(part));
+                    all.push(word.to_string());
+                }
+                colors = Some(all.join(" "));
+            }
+        }
+    }
+}
+
+/// NSH-77: starship's presets, as `starship preset --list` names them.
+fn presets(bin: &Path) -> Vec<String> {
+    Command::new(bin)
+        .args(["preset", "--list"])
+        .stdin(Stdio::null())
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect())
+        .unwrap_or_default()
+}
+
+/// NSH-77: where starship reads its config.
+fn starship_config() -> PathBuf {
+    match std::env::var_os("STARSHIP_CONFIG") {
+        Some(path) => PathBuf::from(path),
+        None => PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".config/starship.toml"),
+    }
+}
+
+/// NSH-77: starship's prompt, with `config` (or its own), as after a
+/// command that failed and took 12s.
+fn starship_preview(bin: &Path, config: Option<&Path>) -> String {
+    let mut command = Command::new(bin);
+    command.args(["prompt", "--status=1", "--cmd-duration=12000"]).stdin(Stdio::null()).stderr(Stdio::null());
+    if let Some(config) = config {
+        command.env("STARSHIP_CONFIG", config);
+    }
+    let width = crossterm::terminal::size().map(|(w, _)| w).unwrap_or(80);
+    command.arg(format!("--terminal-width={width}"));
+    command.output().map(|o| String::from_utf8_lossy(&o.stdout).trim_start_matches('\n').to_string()).unwrap_or_default()
+}
+
+/// NSH-77: picks a preset by number, each shown as starship would draw it;
+/// `None` keeps the config there is (or starship's own).
+fn pick_preset(bin: &Path, terminal: bool) -> Option<String> {
+    let names = presets(bin);
+    let config = starship_config();
+    let first = if config.exists() { format!("keep yours ({})", tilde(&config)) } else { "starship's own".to_string() };
+    let scratch = std::env::temp_dir().join(format!("neosh-starship-{}.toml", std::process::id()));
+    let mut chosen: Option<String> = None;
+    println!("\nstarship's presets: type a number to see it, Enter to take the one shown. {}", dim("Most need a Nerd Font in your terminal."));
+    loop {
+        println!("  {:>2}  {first}", 0);
+        for (i, name) in names.iter().enumerate() {
+            println!("  {:>2}  {name}", i + 1);
+        }
+        let shown = match &chosen {
+            Some(name) if write_preset(bin, name, &scratch).is_ok() => starship_preview(bin, Some(&scratch)),
+            _ => starship_preview(bin, None),
+        };
+        let label = chosen.clone().unwrap_or(first.clone());
+        let shown = if terminal && std::env::var_os("NO_COLOR").is_none() { shown } else { strip_ansi(&shown) };
+        println!("\n  {}\n{shown}\n", dim(&format!("{label}, after a command that failed and took 12s:")));
+        let answer = ask("Preset [Enter: take it]: ");
+        if answer.is_empty() {
+            let _ = std::fs::remove_file(&scratch);
+            return chosen;
+        }
+        match answer.parse::<usize>() {
+            Ok(0) => chosen = None,
+            Ok(n) if n <= names.len() => chosen = Some(names[n - 1].clone()),
+            _ => println!("{}", dim(&format!("· {answer} is not one of the numbers"))),
+        }
+    }
+}
+
+/// NSH-77: writes starship's preset `name` to `path`, the file there kept as `.bak`.
+fn write_preset(bin: &Path, name: &str, path: &Path) -> std::io::Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let out = Command::new(bin).args(["preset", name]).stdin(Stdio::null()).output()?;
+    if !out.status.success() || out.stdout.is_empty() {
+        return Err(std::io::Error::other(format!("starship has no preset {name}")));
+    }
+    if path.exists() && !path.to_string_lossy().contains("neosh-starship-") {
+        let mut bak = path.as_os_str().to_owned();
+        bak.push(".bak");
+        std::fs::copy(path, bak)?;
+    }
+    std::fs::write(path, out.stdout)
+}
+
+fn strip_ansi(s: &str) -> String {
+    regex::Regex::new("\x1b\\[[0-9;]*m").map(|r| r.replace_all(s, "").into_owned()).unwrap_or_else(|_| s.to_string())
 }
 
 /// This computer's short name.
@@ -462,7 +661,7 @@ pub fn translate(prompt: &str, prompt_subst: bool) -> Result<(String, Vec<String
                         let color = braced().or_else(|| n.map(|n| n.to_string()));
                         let code = match color {
                             None => Ok(if fg { "39".to_string() } else { "49".to_string() }),
-                            Some(c) => color_code(&c, fg),
+                            Some(c) => crate::prompt::color_code(&c, fg),
                         };
                         out += &sgr(&code.map_err(|()| format!("names a colour bash does not know (%{e}{{…}})"))?);
                     }
@@ -489,26 +688,6 @@ pub fn translate(prompt: &str, prompt_subst: bool) -> Result<(String, Vec<String
         }
     }
     Ok((out, notes))
-}
-
-/// An SGR code for a zsh colour: a name, 0 to 255, or #rrggbb.
-fn color_code(color: &str, fg: bool) -> Result<String, ()> {
-    let base = if fg { 30 } else { 40 };
-    const NAMES: [&str; 8] = ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"];
-    if let Some(i) = NAMES.iter().position(|n| *n == color) {
-        return Ok((base + i).to_string());
-    }
-    if color == "default" {
-        return Ok((base + 9).to_string());
-    }
-    if let Ok(n) = color.parse::<u8>() {
-        return Ok(if n < 8 { (base + n as usize).to_string() } else { format!("{};5;{n}", base + 8) });
-    }
-    if let Some(hex) = color.strip_prefix('#').filter(|h| h.len() == 6) {
-        let part = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).map_err(|_| ());
-        return Ok(format!("{};2;{};{};{}", base + 8, part(0)?, part(2)?, part(4)?));
-    }
-    Err(())
 }
 
 /// `s` in single quotes for `~/.neoshrc`.
@@ -606,6 +785,11 @@ mod tests {
         let o = args(&["--prompt", "time dir user", "--yes"]).unwrap();
         assert_eq!((o.look, o.parts.as_deref()), (Some(Look::Neosh), Some("user dir time")));
         assert!(args(&["--prompt", "dir sparkles"]).unwrap_err().contains("sparkles is not a part"));
+        // NSH-76, NSH-77
+        assert_eq!(args(&["--colors", "dir=red"]).unwrap().colors.as_deref(), Some("dir=red"));
+        let o = args(&["--preset", "tokyo-night"]).unwrap();
+        assert_eq!((o.look, o.preset.as_deref()), (Some(Look::Starship), Some("tokyo-night")));
+        assert_eq!(args(&["--look", "starship"]).unwrap().look, Some(Look::Starship));
         assert!(args(&["--what"]).is_err());
     }
 }

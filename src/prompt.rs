@@ -50,6 +50,71 @@ pub fn shown(spec: Option<&str>) -> (Vec<&'static str>, Vec<String>) {
     (PARTS.iter().map(|(p, _)| *p).filter(|p| words.contains(p)).collect(), unknown)
 }
 
+/// NSH-76: each part's colour unless `NEOSH_PROMPT_COLORS` says otherwise.
+pub const DEFAULT_COLORS: &[(&str, &str)] =
+    &[("user", "green"), ("host", "green"), ("dir", "bold,blue"), ("folder", "bold,blue"), ("branch", "magenta"), ("took", "yellow"), ("status", "red"), ("time", "dim")];
+
+/// NSH-76: the SGR code of a colour or style: a name (`red`, `bright-red`),
+/// a number up to 255, `#rrggbb`, or `bold`, `dim`, `italic`, `underline`.
+pub fn color_code(color: &str, fg: bool) -> Result<String, ()> {
+    match color {
+        "bold" => return Ok("1".into()),
+        "dim" => return Ok("2".into()),
+        "italic" => return Ok("3".into()),
+        "underline" => return Ok("4".into()),
+        _ => {}
+    }
+    if let Some(bright) = color.strip_prefix("bright-") {
+        const NAMES: [&str; 8] = ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"];
+        if let Some(i) = NAMES.iter().position(|n| *n == bright) {
+            return Ok((if fg { 90 } else { 100 } + i).to_string());
+        }
+    }
+    let base = if fg { 30 } else { 40 };
+    const NAMES: [&str; 8] = ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"];
+    if let Some(i) = NAMES.iter().position(|n| *n == color) {
+        return Ok((base + i).to_string());
+    }
+    if color == "default" {
+        return Ok((base + 9).to_string());
+    }
+    if let Ok(n) = color.parse::<u8>() {
+        return Ok(if n < 8 { (base + n as usize).to_string() } else { format!("{};5;{n}", base + 8) });
+    }
+    if let Some(hex) = color.strip_prefix('#').filter(|h| h.len() == 6) {
+        let part = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).map_err(|_| ());
+        return Ok(format!("{};2;{};{};{}", base + 8, part(0)?, part(2)?, part(4)?));
+    }
+    Err(())
+}
+
+/// NSH-76: the colour of each part, `NEOSH_PROMPT_COLORS` over the default
+/// ones (`none` alone: no colours); and the words in it that are not right.
+pub fn colors(spec: Option<&str>) -> (Vec<(&'static str, String)>, Vec<String>) {
+    let mut out: Vec<(&'static str, String)> = DEFAULT_COLORS
+        .iter()
+        .map(|(p, c)| (*p, c.split(',').filter_map(|s| color_code(s, true).ok()).collect::<Vec<_>>().join(";")))
+        .collect();
+    let mut wrong = Vec::new();
+    let spec = spec.unwrap_or("").trim();
+    if spec == "none" {
+        return (out.into_iter().map(|(p, _)| (p, String::new())).collect(), wrong);
+    }
+    for word in spec.split_whitespace() {
+        let Some((part, styles)) = word.split_once('=') else {
+            wrong.push(word.to_string());
+            continue;
+        };
+        let codes: Result<Vec<String>, ()> =
+            if styles == "none" { Ok(Vec::new()) } else { styles.split(',').map(|s| color_code(s, true)).collect() };
+        match (out.iter_mut().find(|(p, _)| *p == part), codes) {
+            (Some(slot), Ok(codes)) => slot.1 = codes.join(";"),
+            _ => wrong.push(word.to_string()),
+        }
+    }
+    (out, wrong)
+}
+
 /// The time now, `14:05`, in the local time zone.
 pub fn clock() -> String {
     // SAFETY: time and localtime_r fill the values given.
@@ -70,6 +135,8 @@ pub struct Parts<'a> {
     pub user: &'a str,
     pub host: &'a str,
     pub clock: &'a str,
+    /// NSH-76: each part's SGR code, from `colors`.
+    pub colors: &'a [(&'static str, String)],
     pub dir: &'a Path,
     pub home: Option<&'a Path>,
     pub branch: Option<String>,
@@ -84,7 +151,10 @@ pub struct Parts<'a> {
 
 /// NSH-12, NSH-73: the prompt, `~/proj main 1 $ `, of the parts `show` names.
 pub fn render(p: &Parts) -> String {
-    let paint = |code: &str, text: &str| if p.color { format!("\x1b[{code}m{text}\x1b[0m") } else { text.to_string() };
+    let paint = |part: &str, text: &str| match p.colors.iter().find(|(n, _)| *n == part).map(|(_, c)| c.as_str()) {
+        Some(code) if p.color && !code.is_empty() => format!("\x1b[{code}m{text}\x1b[0m"),
+        _ => text.to_string(),
+    };
     let on = |part: &str| p.show.contains(&part);
     let mut pieces = Vec::new();
     let who = match (on("user"), on("host")) {
@@ -94,26 +164,26 @@ pub fn render(p: &Parts) -> String {
         (false, false) => String::new(),
     };
     if !who.is_empty() {
-        pieces.push(paint("32", &who));
+        pieces.push(paint(if on("user") { "user" } else { "host" }, &who));
     }
     if on("folder") {
         let full = tilde(p.dir, p.home);
         let last = if full == "~" || full == "/" { full } else { full.rsplit('/').next().unwrap_or_default().to_string() };
-        pieces.push(paint("1;34", &last));
+        pieces.push(paint("folder", &last));
     } else if on("dir") {
-        pieces.push(paint("1;34", &tilde(p.dir, p.home)));
+        pieces.push(paint("dir", &tilde(p.dir, p.home)));
     }
     if let Some(branch) = p.branch.as_ref().filter(|_| on("branch")) {
-        pieces.push(paint("35", &if p.changed { format!("{branch}*") } else { branch.clone() }));
+        pieces.push(paint("branch", &if p.changed { format!("{branch}*") } else { branch.clone() }));
     }
     if let Some(took) = p.took.and_then(long).filter(|_| on("took")) {
-        pieces.push(paint("33", &took));
+        pieces.push(paint("took", &took));
     }
     if p.status != 0 && on("status") {
-        pieces.push(paint("31", &p.status.to_string()));
+        pieces.push(paint("status", &p.status.to_string()));
     }
     if on("time") && !p.clock.is_empty() {
-        pieces.push(paint("2", p.clock));
+        pieces.push(paint("time", p.clock));
     }
     let sign = if p.root { "# " } else { "$ " };
     match (pieces.is_empty(), on("newline")) {
@@ -222,6 +292,7 @@ mod tests {
             user: "u",
             host: "box",
             clock: "14:05",
+            colors: &[],
             dir,
             home: Some(Path::new("/home/u")),
             branch: None,
@@ -231,6 +302,20 @@ mod tests {
             root: false,
             color: false,
         }
+    }
+
+    // NSH-76
+    #[test]
+    fn each_part_s_colour_can_be_chosen() {
+        let (c, wrong) = colors(Some("dir=green branch=bright-yellow,bold time=#ff8800 status=none nope=red took=sparkle"));
+        let code = |part: &str| c.iter().find(|(p, _)| *p == part).unwrap().1.clone();
+        assert_eq!((code("dir"), code("branch"), code("time"), code("status")), ("32".into(), "93;1".into(), "38;2;255;136;0".into(), String::new()));
+        assert_eq!(code("user"), "32", "the rest keep their default");
+        assert_eq!(wrong, ["nope=red", "took=sparkle"]);
+        assert!(colors(Some("none")).0.iter().all(|(_, c)| c.is_empty()));
+        let dir = Path::new("/home/u/proj");
+        let p = Parts { color: true, colors: &c, branch: Some("main".into()), status: 1, ..parts(dir) };
+        assert_eq!(render(&p), "\x1b[32m~/proj\x1b[0m \x1b[93;1mmain\x1b[0m 1 $ ");
     }
 
     // NSH-73
@@ -259,7 +344,8 @@ mod tests {
         assert_eq!(render(&parts(Path::new("/home/u"))), "~ $ ");
         let slow = Parts { took: Some(std::time::Duration::from_secs(64)), status: 1, ..parts(dir) };
         assert_eq!(render(&slow), "~/proj 1m 4s 1 $ ");
-        let red = render(&Parts { status: 2, color: true, ..parts(dir) });
+        let colors = colors(None).0;
+        let red = render(&Parts { status: 2, color: true, colors: &colors, ..parts(dir) });
         assert!(red.contains("\x1b[31m2\x1b[0m"), "{red:?}");
     }
 

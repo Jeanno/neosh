@@ -459,6 +459,7 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
                     user: &user,
                     host: &host,
                     clock: &clock,
+                    colors: &prompt::colors(s.env_str("NEOSH_PROMPT_COLORS").as_deref()).0,
                     dir: &dir,
                     home: home.as_deref(),
                     // NSH-22: asked only inside a repository.

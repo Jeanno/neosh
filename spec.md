@@ -122,6 +122,29 @@ hands a line to another shell. What neosh adds is below.
 - NSH-75: `neosh --setup --prompt '<parts>'` chooses neosh's own look with
   those parts, as `--look` does (NSH-51); a word that is not a part says
   so, naming the parts, and exits 2.
+- NSH-76: `NEOSH_PROMPT_COLORS` gives parts of neosh's own prompt their
+  colour, as `part=style` words (`dir=green branch=bright-yellow,bold`):
+  a style is a colour's name, `bright-<name>`, a number up to 255,
+  `#rrggbb`, `bold`, `dim`, `italic`, `underline`, several joined by `,`,
+  or `none`; `none` alone is no colours. The parts not named keep theirs
+  (user and host green, the directory bold blue, the branch magenta, the
+  time taken yellow, a status red, the time dim). `NO_COLOR` still means
+  none. After the parts, setup's `my own` asks for colours the same way,
+  showing the prompt again after each answer (a wrong word is said and
+  asked again); Enter keeps them, `default` goes back to neosh's.
+  `--setup --colors '<words>'` sets them without questions; a wrong word
+  says so and exits 2.
+- NSH-77: The look step's fourth choice is starship, which draws the
+  prompt, with themes and icons, as it does in bash: setup writes
+  `eval "$(starship init bash)"`. Its presets are listed by number, each
+  shown as starship draws it (after a command that failed and took 12s);
+  0 keeps the config there is, or starship's own. A preset taken is
+  written to starship's config (`$STARSHIP_CONFIG`, or
+  `~/.config/starship.toml`), the file there kept beside it as `.bak`,
+  said before asking (NSH-50). With no starship on `$PATH`, setup says how
+  to install it and writes nothing. `--setup --look starship` and
+  `--preset <name>` choose it without questions; a preset starship does
+  not have says so, naming them, and exits 2.
 
 ## The language
 

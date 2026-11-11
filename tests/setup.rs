@@ -14,15 +14,33 @@ impl Home {
     }
 
     fn neosh(&self, args: &[&str]) -> Output {
+        self.neosh_with_path(args, "/usr/bin:/bin")
+    }
+
+    fn neosh_with_path(&self, args: &[&str], path: &str) -> Output {
         Command::new(env!("CARGO_BIN_EXE_neosh"))
             .args(args)
             .current_dir(&self.0)
             .env_clear()
             .env("HOME", &self.0)
             .env("ZDOTDIR", &self.0)
-            .env("PATH", "/usr/bin:/bin")
+            .env("PATH", path)
             .output()
             .unwrap()
+    }
+
+    /// A stand-in starship on a PATH of its own: two presets, and a prompt.
+    fn fake_starship(&self) -> String {
+        let bin = self.0.join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let script = "#!/bin/sh\ncase \"$1 $2\" in\n  'preset --list') printf 'pure-preset\\ntokyo-night\\n' ;;\n  'preset pure-preset') echo 'format = \"$directory$character\"' ;;\n  'preset tokyo-night') echo 'format = \"tokyo\"' ;;\n  prompt*) echo '> ' ;;\n  *) exit 1 ;;\nesac\n";
+        let path = bin.join("starship");
+        std::fs::write(&path, script).unwrap();
+        std::os::unix::fs::PermissionsExt::set_mode(&mut std::fs::metadata(&path).unwrap().permissions(), 0o755);
+        let mut perms = std::fs::metadata(&path).unwrap().permissions();
+        std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o755);
+        std::fs::set_permissions(&path, perms).unwrap();
+        format!("{}:/usr/bin:/bin", bin.display())
     }
 
     fn rc(&self) -> String {
@@ -79,7 +97,7 @@ fn setup_without_a_terminal_needs_every_choice() {
     let home = Home::new("noterm");
     let out = home.neosh(&["--setup"]);
     assert_eq!(out.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&out.stderr).contains("--look zsh|neosh (or --prompt '<parts>') and --yes"), "{out:?}");
+    assert!(String::from_utf8_lossy(&out.stderr).contains("--look zsh|neosh|starship (or --prompt '<parts>') and --yes"), "{out:?}");
     assert_eq!(home.neosh(&["--setup", "--look", "fish"]).status.code(), Some(2));
     assert!(!home.0.join(".neoshrc").exists());
 }
@@ -106,4 +124,37 @@ fn the_prompt_s_parts_are_chosen_without_questions() {
     // The default parts write only the choice.
     assert!(home.neosh(&["--setup", "--prompt", "dir branch took status", "--yes"]).status.success());
     assert!(!home.rc().contains("NEOSH_PROMPT"), "{}", home.rc());
+}
+
+// NSH-76
+#[test]
+fn the_prompt_s_colours_are_chosen_without_questions() {
+    let home = Home::new("colors");
+    let out = home.neosh(&["--setup", "--prompt", "dir time", "--colors", "dir=green time=#888888", "--yes"]);
+    assert!(out.status.success(), "{out:?}");
+    assert!(home.rc().contains("NEOSH_PROMPT_COLORS='dir=green time=#888888'"), "{}", home.rc());
+    let bad = home.neosh(&["--setup", "--colors", "dir=sparkly", "--yes"]);
+    assert_eq!(bad.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&bad.stderr).contains("dir=sparkly is not part=colour"), "{bad:?}");
+}
+
+// NSH-77
+#[test]
+fn starship_and_a_preset_are_written_the_config_before_kept() {
+    let home = Home::new("starship");
+    let path = home.fake_starship();
+    std::fs::create_dir_all(home.0.join(".config")).unwrap();
+    std::fs::write(home.0.join(".config/starship.toml"), "# mine\n").unwrap();
+    let out = home.neosh_with_path(&["--setup", "--preset", "tokyo-night", "--yes"], &path);
+    assert!(out.status.success(), "{out:?}");
+    assert!(home.rc().contains("eval \"$(starship init bash)\""), "{}", home.rc());
+    assert_eq!(std::fs::read_to_string(home.0.join(".config/starship.toml")).unwrap(), "format = \"tokyo\"\n");
+    assert_eq!(std::fs::read_to_string(home.0.join(".config/starship.toml.bak")).unwrap(), "# mine\n");
+    let bad = home.neosh_with_path(&["--setup", "--preset", "nope", "--yes"], &path);
+    assert_eq!(bad.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&bad.stderr).contains("nope is not one of starship's presets (pure-preset, tokyo-night)"), "{bad:?}");
+    // Without starship, it says how to install it.
+    let none = home.neosh(&["--setup", "--look", "starship", "--yes"]);
+    assert_eq!(none.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&none.stdout).contains("brew install starship"), "{none:?}");
 }

@@ -20,6 +20,7 @@ Newest asks first. Done items move to the log at the bottom.
 - Low priority (deprioritized 2026-11-09): a Raycast release tag (neoai `raycast-v*`).
 
 ## Done
+- 2026-11-11: the prompt's colours, per part (`NEOSH_PROMPT_COLORS`, in setup's "my own"), and starship as a setup choice, its presets previewed and written to its config (NSH-76, NSH-77); starship checked working in neosh (1.27.0: directory, branch, time taken, status colour).
 - 2026-11-11: choose what neosh's prompt shows in `neosh --setup` ("my own": parts switched by number, the prompt shown as it changes), saved as `NEOSH_PROMPT`; `--prompt '<parts>'` without questions (NSH-73 to NSH-75).
 - 2026-11-11: neosh builds on its brush fork (branch `neosh`); aliases are expanded in the text before parsing, as bash (NSH-71, in brush, neosh's workaround gone); a zsh PS1 from the environment (powerlevel10k) is not used (NSH-10).
 - 2026-11-11: a `PS1` with `\#` or `\!` (from the environment or the rc) no longer ends neosh with "not yet implemented"; they show as in bash, and a prompt that cannot be shown is drawn plain (NSH-72).
