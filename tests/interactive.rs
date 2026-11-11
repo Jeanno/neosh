@@ -462,8 +462,12 @@ fn setup_at_first_start_runs_navi_s_and_copies_zsh_s_look_at_once() {
     std::fs::remove_file(home.0.join(".neoshrc")).unwrap();
     std::fs::write(home.0.join(".zshrc"), "PROMPT='%n-zsh-look %# '\nRPROMPT='%T'\nexport LSCOLORS=Gxfxcxdxbxegedabagacad\n").unwrap();
     let zdotdir = home.0.display().to_string();
-    // zsh's look, no z, write it.
-    let screen = home.run(&["y", "4", "n", "y", "", "echo $LSCOLORS", "exit"], &[("ZDOTDIR", &zdotdir)]);
+    // Copy from zsh, zsh's look, no z, write it, not the login shell.
+    let screen = home.run(&["y", "y", "4", "n", "y", "", "echo $LSCOLORS", "exit"], &[("ZDOTDIR", &zdotdir)]);
+    // NSH-79: a zsh setup is offered first.
+    assert!(screen.contains("Step 1 of 5 · From your zsh"), "{screen}");
+    assert!(screen.contains("ls colours") && screen.contains("Copy these from your zsh? [Y/n]"), "{screen}");
+    assert!(screen.find("From your zsh") < screen.find("Step 2 of 5 · How the prompt looks"), "{screen}");
     assert!(home.log().contains("ARGS: setup"), "{}", home.log());
     assert!(screen.contains("RPROMPT"), "{screen}");
     let rc = std::fs::read_to_string(home.0.join(".neoshrc")).unwrap();

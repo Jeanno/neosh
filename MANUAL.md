@@ -55,6 +55,10 @@ navi's manual, `navi setup` and `navi usage`. This manual covers the shell.
   Yes runs it, "later" asks again next time, and "never" stops asking.
 - `neosh --setup` runs it any time; run again, it changes what it set. (`neosh setup`
   without dashes runs a script named `setup`, as bash would.)
+- First, if you use zsh: "From your zsh" lists what it can copy and asks once. That is the
+  folders your zsh adds to `PATH` (from `~/.zprofile`, `~/.zshrc`), so neosh as your login
+  shell finds the same commands, navi included; and `CLICOLOR`, `LSCOLORS`, `LS_COLORS`, so
+  `ls` looks the same. With this step there are five, not four.
 - Step 1 of 4, the look: starship (the default), neosh's own prompt, your own pick of
   its parts, or your zsh's.
   - Choosing starship with none installed installs it: `brew install starship`, or with no
@@ -67,12 +71,9 @@ navi's manual, `navi setup` and `navi usage`. This manual covers the shell.
     `RPROMPT` is left out (bash has no right prompt), and setup says so.
   - A prompt that runs commands or functions, uses `%(…)` conditions, or comes from a theme
     (oh-my-zsh, powerlevel10k) cannot be copied; setup says why and keeps neosh's prompt.
-  - `CLICOLOR`, `LSCOLORS` and `LS_COLORS` from zsh are kept, so `ls` looks the same.
 - Step 2 of 4, plugins: offers each plugin neosh knows by name (today `z`), yes by
   default, written as `plugins=(z)`. If your `~/.neoshrc` names plugins itself, outside
   the markers, setup leaves them alone.
-- Setup also copies the folders your zsh adds to `PATH` (from `~/.zprofile`, `~/.zshrc`),
-  so neosh as your login shell finds the same commands, navi included.
 - Step 3 of 4, the model: runs `navi setup` to choose the model that answers `?`. With no
   `navi` on `$PATH`, it says how to install navi and goes on.
 - Step 4 of 4, your login shell: whether terminals should start neosh. No unless you say

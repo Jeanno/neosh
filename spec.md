@@ -54,7 +54,8 @@ hands a line to another shell. What neosh adds is below.
 ## Setup
 
 - NSH-47: Setup gets neosh ready in the terminal, a step at a time, each one
-  skippable: how the prompt looks first, the prompt being most of what a
+  skippable: what to copy from zsh, when there is a zsh setup (NSH-79),
+  then how the prompt looks, the prompt being most of what a
   shell looks like, then plugins (NSH-78), the model navi answers
   with, then the login shell (NSH-80). As zsh's
   first-run setup does, it is offered when an interactive neosh starts with
@@ -81,8 +82,6 @@ hands a line to another shell. What neosh adds is below.
     functions, `%(…)` conditions, or a theme: oh-my-zsh's, powerlevel10k)
     is named, with why, and neosh's own prompt is kept, which shows the
     branch and a failed status as most themes do;
-  - `CLICOLOR`, `LSCOLORS` and `LS_COLORS`, when zsh sets them, are kept,
-    so `ls` is coloured as in zsh.
 - NSH-50: What setup would write is shown first and written only on yes,
   into `~/.neoshrc` between `# >>> neosh setup >>>` and
   `# <<< neosh setup <<<`, replacing what an earlier setup wrote there and
@@ -98,7 +97,7 @@ hands a line to another shell. What neosh adds is below.
   that answers `?`, and the login shell) and asks once: yes goes straight to the first step,
   with no second question; leaving navi's setup with no model, navi says
   so (SET-29). Each step is
-  headed `Step N of 4` in bold, with hints dim (plain without a terminal or
+  headed `Step N of 4` (5 with NSH-79's) in bold, with hints dim (plain without a terminal or
   with `NO_COLOR`). At the end it says neosh is ready and shows how to
   begin: `?what's in this folder`, `?` for navi mode, `neosh --setup` to
   change it.
@@ -165,15 +164,21 @@ hands a line to another shell. What neosh adds is below.
   it starts from what an earlier setup chose. `--setup --plugins '<names>'`
   chooses them without questions (`''` for none); a name neosh does not
   know says so, naming those it knows, and exits 2.
-- NSH-79: Setup copies the folders your zsh puts on `PATH`, so a neosh
-  started as a login shell (which reads `/etc/profile` and `~/.profile`,
-  not zsh's files) finds what zsh finds, navi in `~/.local/bin` among
-  them. It asks a login zsh for its `PATH` (from the system's `PATH`, as
-  NSH-49 asks for its look), and writes in the setup block, before the
-  prompt lines, a line adding each folder that is there and is not one of
-  the system's (`/etc/paths`, `/etc/paths.d`), each only when `PATH` does
-  not have it already, so a neosh started from another has it once.
-  Every setup writes it afresh; with no zsh, or no such folders, none.
+- NSH-79: With a zsh setup (`.zshrc`, `.zprofile`, `.zshenv` or `.zlogin`
+  in `$ZDOTDIR` or home), setup's first step is `From your zsh`: it asks a
+  login zsh (from the system's `PATH`, as NSH-49 asks for its look) what
+  can be copied, shows it, and asks once, `Copy these from your zsh?
+  [Y/n]`. It copies:
+  - the folders zsh puts on `PATH`, so a neosh started as a login shell
+    (which reads `/etc/profile` and `~/.profile`, not zsh's files) finds
+    what zsh finds, navi in `~/.local/bin` among them: each that is there
+    and is not one of the system's (`/etc/paths`, `/etc/paths.d`), added
+    only when `PATH` does not have it already, so a neosh started from
+    another has it once;
+  - `CLICOLOR`, `LSCOLORS` and `LS_COLORS`, so `ls` is coloured as in zsh.
+  They go first in the setup block. With nothing to copy the step is left
+  out; the steps are numbered with it (`Step 1 of 5`) or without it.
+  Without questions (`--look … --yes`) they are copied.
 - NSH-80: Setup's last step, and the installer's last question, is whether
   neosh is your login shell: the system's (`dscl` on macOS, `getent`
   elsewhere), not `$SHELL`, which apps keep from when they started. When

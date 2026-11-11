@@ -128,9 +128,32 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
     // Every step is asked unless the look was given (NSH-51).
     let steps = options.look.is_none();
     let before = std::fs::read_to_string(rc).unwrap_or_default();
-    // NSH-49: the look first, starship's the default (NSH-77).
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    // NSH-79: zsh, asked once when there is a zsh setup, for its look and
+    // what can be copied from it.
+    let zsh = if find("zsh").is_some() && zsh_configured(home.as_deref()) {
+        ask_zsh()
+    } else {
+        Err("there is no zsh setup to copy a look from".to_string())
+    };
+    let (from_zsh, found) = zsh.as_ref().map(|z| zsh_config(z, home.as_deref())).unwrap_or_default();
+    let total = 4 + usize::from(steps && !from_zsh.is_empty());
+    let step = std::cell::Cell::new(0);
+    let head = |title: &str| {
+        step.set(step.get() + 1);
+        println!("\n{}", bold(&format!("Step {} of {total} · {title}", step.get())));
+    };
+    // NSH-79: first, whether to copy what zsh sets up.
+    let copy = from_zsh.is_empty() || !steps || {
+        head("From your zsh");
+        for (what, detail) in &found {
+            println!("  {what:<10} {}", dim(detail));
+        }
+        yes_no("Copy these from your zsh? [Y/n] ", true)
+    };
+    // NSH-49: the look, starship's the default (NSH-77).
     if steps {
-        println!("\n{}", bold("Step 1 of 4 · How the prompt looks"));
+        head("How the prompt looks");
         println!("  1  starship     {}", dim("themes and icons, drawn by starship"));
         println!("  2  neosh's own  {}", dim("the directory, git branch and a failed status"));
         println!("  3  my own       {}", dim("neosh's, with the parts and colours you pick"));
@@ -184,18 +207,19 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
         _ if own_plugins(&before) => {
             if steps || options.plugins.is_some() {
                 if steps {
-                    println!("\n{}", bold("Step 2 of 4 · Plugins"));
+                    head("Plugins");
                 }
                 println!("{}", dim(&format!("· {} names its own plugins; they stay as they are.", tilde(rc))));
             }
             None
         }
         Some(names) => Some(names.clone()),
-        None if steps => Some(pick_plugins(earlier_plugins(&before))),
+        None if steps => {
+            head("Plugins");
+            Some(pick_plugins(earlier_plugins(&before)))
+        }
         None => earlier_plugins(&before),
     };
-    // NSH-79: zsh, asked once, for its look and its PATH.
-    let zsh = if find("zsh").is_some() { ask_zsh() } else { Err("zsh is not installed, so there is no zsh look to copy".to_string()) };
     // NSH-49
     let mut lines = match look {
         // NSH-74: the parts, unless they are the default ones.
@@ -227,11 +251,10 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
             lines
         }
     };
-    // NSH-79: the folders zsh puts on PATH, first, so what follows finds them.
-    let home = std::env::var_os("HOME").map(PathBuf::from);
-    if let Some(line) = zsh.as_ref().ok().and_then(|z| path_line(&z.path, &system_path(), home.as_deref(), |d| Path::new(d).is_dir())) {
-        println!("{}", dim("· The folders your zsh adds to PATH are added for neosh too."));
-        lines.insert(usize::from(look == Look::Neosh && lines.first().is_some_and(|l| l == OWN_LOOK)), line);
+    // NSH-79: what was copied from zsh, first, so what follows finds it.
+    if copy {
+        let at = usize::from(look == Look::Neosh && lines.first().is_some_and(|l| l == OWN_LOOK));
+        lines.splice(at..at, from_zsh);
     }
     if let Some(names) = plugins.filter(|p| !p.is_empty()) {
         lines.push(format!("plugins=({})", names.join(" ")));
@@ -281,7 +304,7 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
     }
     // NSH-48: the model navi answers with, by navi's own setup.
     if steps {
-        println!("\n{}", bold("Step 3 of 4 · The model that answers ?"));
+        head("The model that answers ?");
         match find("navi") {
             // navi's setup says itself when it leaves no model answering (SET-29).
             Some(navi) => {
@@ -292,7 +315,7 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
     }
     // NSH-80: neosh as the login shell, asked; no unless yes.
     if steps {
-        println!("\n{}", bold("Step 4 of 4 · Your login shell"));
+        head("Your login shell");
         login_step();
     }
     if terminal {
@@ -406,7 +429,6 @@ fn earlier_plugins(rc: &str) -> Option<Vec<String>> {
 /// NSH-78: each plugin neosh knows, asked in turn; yes unless an earlier
 /// setup left it out.
 fn pick_plugins(earlier: Option<Vec<String>>) -> Vec<String> {
-    println!("\n{}", bold("Step 2 of 4 · Plugins"));
     let mut taken = Vec::new();
     for (name, repo, what) in crate::plugins::KNOWN {
         let default = earlier.as_ref().is_none_or(|e| e.iter().any(|n| n == name));
@@ -818,10 +840,47 @@ pub fn lines_for(zsh: &Zsh, starship: bool) -> (Vec<String>, Vec<String>) {
             }
         }
     }
-    for (name, value) in &zsh.colors {
-        lines.push(format!("export {name}={}", quote(value)));
-    }
     (lines, notes)
+}
+
+/// NSH-79: whether there is a zsh setup: its startup files in `$ZDOTDIR`
+/// or home.
+fn zsh_configured(home: Option<&Path>) -> bool {
+    let dir = std::env::var_os("ZDOTDIR").map(PathBuf::from).or_else(|| home.map(Path::to_path_buf));
+    dir.is_some_and(|d| [".zshrc", ".zprofile", ".zshenv", ".zlogin"].iter().any(|f| d.join(f).is_file()))
+}
+
+/// NSH-79: what setup copies from zsh, as lines for the block, and what
+/// they are, to show: the folders it adds to PATH, and ls's colours.
+pub fn zsh_config(zsh: &Zsh, home: Option<&Path>) -> (Vec<String>, Vec<(String, String)>) {
+    let mut lines = Vec::new();
+    let mut found = Vec::new();
+    let system = system_path();
+    if let Some(line) = path_line(&zsh.path, &system, home, |d| Path::new(d).is_dir()) {
+        let dirs: Vec<String> = zsh
+            .path
+            .split(':')
+            .filter(|d| d.starts_with('/') && !system.iter().any(|s| s == d) && Path::new(d).is_dir())
+            .map(|d| tilde(Path::new(d)))
+            .fold(Vec::new(), |mut v, d| {
+                if !v.contains(&d) {
+                    v.push(d);
+                }
+                v
+            });
+        let more = if dirs.len() > 3 { ", …" } else { "" };
+        let n = dirs.len();
+        found.push(("PATH".to_string(), format!("{n} folder{} zsh adds: {}{more}", if n == 1 { "" } else { "s" }, dirs[..n.min(3)].join(", "))));
+        lines.push(line);
+    }
+    if !zsh.colors.is_empty() {
+        let names: Vec<&str> = zsh.colors.iter().map(|(n, _)| *n).collect();
+        found.push(("ls colours".to_string(), names.join(" ")));
+        for (name, value) in &zsh.colors {
+            lines.push(format!("export {name}={}", quote(value)));
+        }
+    }
+    (lines, found)
 }
 
 /// NSH-49: a zsh `PROMPT` as bash's `PS1`, with what is only close; or why not.
@@ -977,7 +1036,11 @@ mod tests {
         assert_eq!(zsh.path, "/usr/bin:/h/bin");
         assert_eq!(zsh.colors, vec![("CLICOLOR", "1".to_string()), ("LSCOLORS", "Gxfx".to_string())]);
         let (lines, notes) = lines_for(&zsh, false);
-        assert_eq!(lines, vec![r"PS1='\u \w \$ '", "export CLICOLOR='1'", "export LSCOLORS='Gxfx'"]);
+        assert_eq!(lines, vec![r"PS1='\u \w \$ '"]);
+        // NSH-79: ls's colours are copied from zsh, not part of the look.
+        let (copied, found) = zsh_config(&zsh, None);
+        assert_eq!(copied, vec!["export CLICOLOR='1'", "export LSCOLORS='Gxfx'"]);
+        assert_eq!(found, vec![("ls colours".to_string(), "CLICOLOR LSCOLORS".to_string())]);
         assert!(notes[0].contains("RPROMPT"), "{notes:?}");
         let starship = Zsh { starship: true, ..Zsh::default() };
         assert_eq!(lines_for(&starship, true).0, vec![STARSHIP_INIT]);
