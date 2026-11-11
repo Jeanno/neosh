@@ -28,7 +28,7 @@ use brush_interactive::{InputBackend, InteractivePrompt, ReadResult, ShellError,
 
 const USAGE: &str = "\
 usage: neosh [-l] [--norc] [-c '<commands>' [name [args…]] | <script> [args…]]
-       neosh --setup [--look zsh|neosh] [--yes]
+       neosh --setup [--look zsh|neosh | --prompt '<parts>'] [--yes]
 
 neosh is a bash-compatible shell with navi inside: start a line with ? to
 ask navi, or write a sentence that is not a command.
@@ -36,7 +36,8 @@ ask navi, or write a sentence that is not a command.
   -c COMMANDS  run the commands and exit with the last one's status
   -l, --login  read ~/.profile first, as a login shell does
   --norc       do not read ~/.neoshrc
-  --setup      choose navi's model and neosh's look (zsh's or neosh's own)
+  --setup      choose navi's model and neosh's look (zsh's, neosh's own, or
+               your own pick of its parts: --prompt 'user dir branch time')
   --version    say which neosh this is";
 
 /// What the command line asked for (NSH-1).
@@ -447,8 +448,17 @@ impl<IB: InputBackend> InputBackend for WithNavi<IB> {
             let ours = guard.as_ref().filter(|s| s.env_str("PS1").as_deref() == Some(prompt::DEFAULT_PS1)).map(|s| {
                 let dir = s.working_dir().to_path_buf();
                 let home = std::env::var_os("HOME").map(PathBuf::from);
-                let branch = prompt::branch(&dir);
+                // NSH-73: the parts NEOSH_PROMPT names, read at each prompt.
+                let (show, _) = prompt::shown(s.env_str("NEOSH_PROMPT").as_deref());
+                let user = s.env_str("USER").map(|u| u.into_owned()).unwrap_or_default();
+                let host = s.env_str("HOSTNAME").map(|h| h.split('.').next().unwrap_or_default().to_string()).unwrap_or_default();
+                let clock = if show.contains(&"time") { prompt::clock() } else { String::new() };
+                let branch = if show.contains(&"branch") { prompt::branch(&dir) } else { None };
                 prompt::render(&prompt::Parts {
+                    show: &show,
+                    user: &user,
+                    host: &host,
+                    clock: &clock,
                     dir: &dir,
                     home: home.as_deref(),
                     // NSH-22: asked only inside a repository.

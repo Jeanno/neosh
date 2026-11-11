@@ -20,6 +20,7 @@ Newest asks first. Done items move to the log at the bottom.
 - Low priority (deprioritized 2026-11-09): a Raycast release tag (neoai `raycast-v*`).
 
 ## Done
+- 2026-11-11: choose what neosh's prompt shows in `neosh --setup` ("my own": parts switched by number, the prompt shown as it changes), saved as `NEOSH_PROMPT`; `--prompt '<parts>'` without questions (NSH-73 to NSH-75).
 - 2026-11-11: neosh builds on its brush fork (branch `neosh`); aliases are expanded in the text before parsing, as bash (NSH-71, in brush, neosh's workaround gone); a zsh PS1 from the environment (powerlevel10k) is not used (NSH-10).
 - 2026-11-11: a `PS1` with `\#` or `\!` (from the environment or the rc) no longer ends neosh with "not yet implemented"; they show as in bash, and a prompt that cannot be shown is drawn plain (NSH-72).
 - 2026-11-11: release v0.1.1 (plugins, rupa/z, aliases as in bash).

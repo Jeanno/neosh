@@ -25,6 +25,8 @@ pub struct Options {
     pub yes: bool,
     /// Offered as neosh starts, so what is written counts at once.
     pub at_start: bool,
+    /// NSH-75: the parts of neosh's own prompt, from `--prompt`.
+    pub parts: Option<String>,
 }
 
 /// NSH-51: what follows `--setup`.
@@ -40,6 +42,17 @@ pub fn parse(args: &[String]) -> Result<Options, String> {
                     Some("neosh") => Look::Neosh,
                     other => return Err(format!("--look takes zsh or neosh, not {}", other.unwrap_or("nothing"))),
                 })
+            }
+            // NSH-75: neosh's own look, with these parts.
+            "--prompt" => {
+                let words = args.next().ok_or("--prompt takes the parts to show, as 'dir branch time'")?;
+                let (shown, unknown) = crate::prompt::shown(Some(words));
+                if let Some(word) = unknown.first() {
+                    let known: Vec<&str> = crate::prompt::PARTS.iter().map(|(p, _)| *p).collect();
+                    return Err(format!("--prompt: {word} is not a part (parts: {})", known.join(" ")));
+                }
+                options.parts = Some(shown.join(" "));
+                options.look = Some(Look::Neosh);
             }
             other => return Err(format!("unknown option {other} for --setup")),
         }
@@ -72,7 +85,7 @@ const OWN_LOOK: &str = "# neosh's own look; `neosh --setup` changes it.";
 pub fn run(options: &Options, rc: &Path) -> i32 {
     let terminal = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
     if !terminal && !(options.look.is_some() && options.yes) {
-        eprintln!("neosh: --setup asks its questions on a terminal; without one, give --look zsh|neosh and --yes");
+        eprintln!("neosh: --setup asks its questions on a terminal; without one, give --look zsh|neosh (or --prompt '<parts>') and --yes");
         return 1;
     }
     // NSH-48: the model navi answers with, by navi's own setup.
@@ -88,11 +101,25 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
         println!("\n{}", bold("Step 2 of 2 · How the prompt looks"));
         println!("  1  neosh's own  {}", dim("the directory, git branch and a failed status"));
         println!("  2  like my zsh  {}", dim("its prompt and colours"));
+        println!("  3  my own       {}", dim("neosh's, with the parts you pick"));
     }
-    let look = options.look.unwrap_or_else(|| if ask("Choose [1]: ") == "2" { Look::Zsh } else { Look::Neosh });
+    let mut parts = options.parts.clone();
+    let look = options.look.unwrap_or_else(|| match ask("Choose [1]: ").as_str() {
+        "2" => Look::Zsh,
+        "3" => {
+            let before = std::fs::read_to_string(rc).unwrap_or_default();
+            parts = Some(pick(&parts_in(&before), terminal));
+            Look::Neosh
+        }
+        _ => Look::Neosh,
+    });
     // NSH-49
     let lines = match look {
-        Look::Neosh => vec![OWN_LOOK.to_string()],
+        // NSH-74: the parts, unless they are the default ones.
+        Look::Neosh => match parts.filter(|p| p != crate::prompt::DEFAULT_PARTS) {
+            Some(p) => vec![OWN_LOOK.to_string(), format!("NEOSH_PROMPT={}", quote(&p))],
+            None => vec![OWN_LOOK.to_string()],
+        },
         Look::Zsh => {
             let (lines, notes) = zsh_look();
             for note in notes {
@@ -109,10 +136,11 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
     if after == before {
         println!("{}", dim(&format!("· {} already has this look.", tilde(rc))));
     } else {
-        let asking = !options.yes && (look == Look::Zsh || earlier);
-        if look == Look::Neosh && earlier {
+        let custom = lines.len() > 1;
+        let asking = !options.yes && (look == Look::Zsh || custom || earlier);
+        if look == Look::Neosh && earlier && !custom {
             println!("neosh's own look: the lines an earlier setup wrote in {} go.", tilde(rc));
-        } else if look == Look::Zsh {
+        } else if look == Look::Zsh || custom {
             println!("This goes in {}:\n", tilde(rc));
             for line in &lines {
                 println!("  {line}");
@@ -140,6 +168,81 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
         println!();
     }
     0
+}
+
+/// NSH-74: the parts an earlier setup chose, from its `NEOSH_PROMPT=` line.
+fn parts_in(rc: &str) -> String {
+    block(rc)
+        .and_then(|lines| lines.iter().find_map(|l| l.trim().strip_prefix("NEOSH_PROMPT=")))
+        .map(|v| v.trim_matches(['\'', '"']).to_string())
+        .unwrap_or_else(|| crate::prompt::DEFAULT_PARTS.to_string())
+}
+
+/// NSH-74: the parts of neosh's own prompt, picked by number with the prompt
+/// shown as it would be after each change; the parts picked.
+fn pick(start: &str, terminal: bool) -> String {
+    use crate::prompt::{PARTS, Parts, branch, clock, render, shown};
+    let mut on: Vec<&str> = shown(Some(start)).0;
+    let dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let user = std::env::var("USER").unwrap_or_else(|_| "you".into());
+    let host = hostname();
+    let time = clock();
+    let color = terminal && std::env::var_os("NO_COLOR").is_none();
+    println!("\nType numbers to switch parts on or off ({}), Enter when done.", dim("as 4 8"));
+    loop {
+        for (i, (part, what)) in PARTS.iter().enumerate() {
+            let mark = if on.contains(part) { "[x]" } else { "[ ]" };
+            println!("  {:>2} {mark} {part:<8} {}", i + 1, dim(what));
+        }
+        let show: Vec<&str> = PARTS.iter().map(|(p, _)| *p).filter(|p| on.contains(p)).collect();
+        let preview = render(&Parts {
+            show: &show,
+            user: &user,
+            host: &host,
+            clock: &time,
+            dir: &dir,
+            home: home.as_deref(),
+            branch: Some(branch(&dir).unwrap_or_else(|| "main".into())),
+            changed: false,
+            status: 1,
+            took: Some(std::time::Duration::from_secs(12)),
+            root: false,
+            color,
+        });
+        println!("\n  {}\n{preview}\n", dim("After a command that failed and took 12s:"));
+        let answer = ask("Switch [Enter: done]: ");
+        if answer.is_empty() {
+            return show.join(" ");
+        }
+        for word in answer.split([' ', ',']).filter(|w| !w.is_empty()) {
+            match word.parse::<usize>().ok().and_then(|n| PARTS.get(n.wrapping_sub(1))) {
+                Some((part, _)) => match on.iter().position(|p| p == part) {
+                    Some(at) => {
+                        on.remove(at);
+                    }
+                    None => {
+                        on.push(part);
+                        // The whole directory or its last folder, not both.
+                        let other = match *part { "dir" => Some("folder"), "folder" => Some("dir"), _ => None };
+                        on.retain(|p| Some(*p) != other);
+                    }
+                },
+                None => println!("{}", dim(&format!("· {word} is not one of the numbers"))),
+            }
+        }
+    }
+}
+
+/// This computer's short name.
+fn hostname() -> String {
+    let mut buf = [0u8; 256];
+    // SAFETY: gethostname writes at most the length given.
+    if unsafe { libc::gethostname(buf.as_mut_ptr().cast(), buf.len()) } != 0 {
+        return "host".into();
+    }
+    let end = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+    String::from_utf8_lossy(&buf[..end]).split('.').next().unwrap_or("host").to_string()
 }
 
 /// The lines between setup's markers, when there are markers.
@@ -499,6 +602,10 @@ mod tests {
         assert_eq!(args(&["--look", "zsh", "--yes"]), Ok(Options { look: Some(Look::Zsh), yes: true, ..Options::default() }));
         assert_eq!(args(&[]), Ok(Options::default()));
         assert!(args(&["--look", "fish"]).is_err());
+        // NSH-75
+        let o = args(&["--prompt", "time dir user", "--yes"]).unwrap();
+        assert_eq!((o.look, o.parts.as_deref()), (Some(Look::Neosh), Some("user dir time")));
+        assert!(args(&["--prompt", "dir sparkles"]).unwrap_err().contains("sparkles is not a part"));
         assert!(args(&["--what"]).is_err());
     }
 }

@@ -208,6 +208,15 @@ prompt clears once navi has answered.
 - After a failed command, the status shows before `$` in red: `~/proj main 1 $`.
 - A command that took 5 seconds or more shows its time: `~/proj main 1m 4s $`.
 - `NO_COLOR` turns colour off.
+- Pick what neosh's prompt shows with `neosh --setup` (choice 3, "my own"): your
+  user and host, the whole directory or its last folder, the git branch, how long a
+  slow command took, a failed status, the time, and `$` on its own line. You see the
+  prompt change as you pick. It is saved as one line in `~/.neoshrc`, which you can
+  also write yourself, or set at the prompt to try:
+
+      NEOSH_PROMPT='user host folder branch time'
+
+  Or without questions: `neosh --setup --prompt 'folder branch time' --yes`.
 - Set `PS1` in `~/.neoshrc` (or the environment) to use your own prompt. A zsh prompt
   exported from zsh (powerlevel10k's, say) is not used, since bash cannot show it.
 - The terminal title shows the directory while waiting and the command while running. The

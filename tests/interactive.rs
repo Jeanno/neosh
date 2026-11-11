@@ -473,6 +473,23 @@ fn setup_at_first_start_runs_navi_s_and_copies_zsh_s_look_at_once() {
     assert!(screen.contains("\nGxfxcxdxbxegedabagacad"), "{screen}");
 }
 
+// NSH-73, NSH-74
+#[test]
+fn setup_picks_the_prompt_s_parts_with_it_shown_as_they_change() {
+    let home = Home::new("pickparts");
+    std::fs::remove_file(home.0.join(".neoshrc")).unwrap();
+    // Model step, "my own", folder only and the time, done, write it.
+    let screen = home.run(&["y", "3", "4 8", "", "y", "false", "exit"], &[("USER", "tester")]);
+    assert!(screen.contains("[x] dir") && screen.contains("[ ] folder"), "{screen}");
+    assert!(screen.contains("After a command that failed and took 12s:"), "{screen}");
+    let rc = std::fs::read_to_string(home.0.join(".neoshrc")).unwrap();
+    assert!(rc.contains("NEOSH_PROMPT='folder branch took status time'"), "{rc}");
+    // It counts at once: the last folder, a failed status, the time.
+    let after = screen.rsplit("Saved in").next().unwrap_or_default();
+    let shown = regex::Regex::new(r"\nwork 1 \d\d:\d\d \$ ").unwrap();
+    assert!(shown.is_match(after), "{after}");
+}
+
 // NSH-47, NSH-50: Enter all the way is a setup done, not one to offer again.
 #[test]
 fn setup_with_every_default_is_done_and_says_how_to_begin() {

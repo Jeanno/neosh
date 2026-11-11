@@ -79,7 +79,7 @@ fn setup_without_a_terminal_needs_every_choice() {
     let home = Home::new("noterm");
     let out = home.neosh(&["--setup"]);
     assert_eq!(out.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&out.stderr).contains("--look zsh|neosh and --yes"), "{out:?}");
+    assert!(String::from_utf8_lossy(&out.stderr).contains("--look zsh|neosh (or --prompt '<parts>') and --yes"), "{out:?}");
     assert_eq!(home.neosh(&["--setup", "--look", "fish"]).status.code(), Some(2));
     assert!(!home.0.join(".neoshrc").exists());
 }
@@ -91,4 +91,19 @@ fn a_script_that_is_not_there_is_said_as_bash_says_it() {
     let out = home.neosh(&["setup"]);
     assert_eq!(out.status.code(), Some(127));
     assert_eq!(String::from_utf8_lossy(&out.stderr), "neosh: setup: No such file or directory\n");
+}
+
+// NSH-73, NSH-75
+#[test]
+fn the_prompt_s_parts_are_chosen_without_questions() {
+    let home = Home::new("parts");
+    let out = home.neosh(&["--setup", "--prompt", "time folder", "--yes"]);
+    assert!(out.status.success(), "{out:?}");
+    assert!(home.rc().contains("NEOSH_PROMPT='folder time'"), "{}", home.rc());
+    let bad = home.neosh(&["--setup", "--prompt", "folder sparkles", "--yes"]);
+    assert_eq!(bad.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&bad.stderr).contains("sparkles is not a part"), "{bad:?}");
+    // The default parts write only the choice.
+    assert!(home.neosh(&["--setup", "--prompt", "dir branch took status", "--yes"]).status.success());
+    assert!(!home.rc().contains("NEOSH_PROMPT"), "{}", home.rc());
 }

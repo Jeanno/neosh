@@ -25,8 +25,51 @@ pub fn is_zsh(ps1: &str) -> bool {
     false
 }
 
+/// NSH-73: the parts of neosh's own prompt `NEOSH_PROMPT` can name, in the
+/// order they are shown, with what each is.
+pub const PARTS: &[(&str, &str)] = &[
+    ("user", "your user name"),
+    ("host", "this computer's name"),
+    ("dir", "the directory"),
+    ("folder", "only the directory's last folder"),
+    ("branch", "the git branch, * when files changed"),
+    ("took", "how long a slow command took"),
+    ("status", "a failed command's status"),
+    ("time", "the time"),
+    ("newline", "$ on a line of its own"),
+];
+
+/// NSH-73: what neosh's own prompt shows with no `NEOSH_PROMPT`.
+pub const DEFAULT_PARTS: &str = "dir branch took status";
+
+/// NSH-73: the parts a `NEOSH_PROMPT` names, in their order; and the words
+/// in it that are not parts.
+pub fn shown(spec: Option<&str>) -> (Vec<&'static str>, Vec<String>) {
+    let words: Vec<&str> = spec.unwrap_or(DEFAULT_PARTS).split_whitespace().collect();
+    let unknown = words.iter().filter(|w| !PARTS.iter().any(|(p, _)| p == *w)).map(|w| (*w).to_string()).collect();
+    (PARTS.iter().map(|(p, _)| *p).filter(|p| words.contains(p)).collect(), unknown)
+}
+
+/// The time now, `14:05`, in the local time zone.
+pub fn clock() -> String {
+    // SAFETY: time and localtime_r fill the values given.
+    unsafe {
+        let now = libc::time(std::ptr::null_mut());
+        let mut tm: libc::tm = std::mem::zeroed();
+        if libc::localtime_r(&now, &mut tm).is_null() {
+            return String::new();
+        }
+        format!("{:02}:{:02}", tm.tm_hour, tm.tm_min)
+    }
+}
+
 /// What the prompt shows.
 pub struct Parts<'a> {
+    /// NSH-73: which parts, from `shown`.
+    pub show: &'a [&'a str],
+    pub user: &'a str,
+    pub host: &'a str,
+    pub clock: &'a str,
     pub dir: &'a Path,
     pub home: Option<&'a Path>,
     pub branch: Option<String>,
@@ -39,24 +82,45 @@ pub struct Parts<'a> {
     pub color: bool,
 }
 
-/// NSH-12: the prompt, `~/proj main 1 $ `.
+/// NSH-12, NSH-73: the prompt, `~/proj main 1 $ `, of the parts `show` names.
 pub fn render(p: &Parts) -> String {
     let paint = |code: &str, text: &str| if p.color { format!("\x1b[{code}m{text}\x1b[0m") } else { text.to_string() };
-    let mut out = paint("1;34", &tilde(p.dir, p.home));
-    if let Some(branch) = &p.branch {
-        out += " ";
-        out += &paint("35", &if p.changed { format!("{branch}*") } else { branch.clone() });
+    let on = |part: &str| p.show.contains(&part);
+    let mut pieces = Vec::new();
+    let who = match (on("user"), on("host")) {
+        (true, true) => format!("{}@{}", p.user, p.host),
+        (true, false) => p.user.to_string(),
+        (false, true) => p.host.to_string(),
+        (false, false) => String::new(),
+    };
+    if !who.is_empty() {
+        pieces.push(paint("32", &who));
     }
-    if let Some(took) = p.took.and_then(long) {
-        out += " ";
-        out += &paint("33", &took);
+    if on("folder") {
+        let full = tilde(p.dir, p.home);
+        let last = if full == "~" || full == "/" { full } else { full.rsplit('/').next().unwrap_or_default().to_string() };
+        pieces.push(paint("1;34", &last));
+    } else if on("dir") {
+        pieces.push(paint("1;34", &tilde(p.dir, p.home)));
     }
-    if p.status != 0 {
-        out += " ";
-        out += &paint("31", &p.status.to_string());
+    if let Some(branch) = p.branch.as_ref().filter(|_| on("branch")) {
+        pieces.push(paint("35", &if p.changed { format!("{branch}*") } else { branch.clone() }));
     }
-    out += if p.root { " # " } else { " $ " };
-    out
+    if let Some(took) = p.took.and_then(long).filter(|_| on("took")) {
+        pieces.push(paint("33", &took));
+    }
+    if p.status != 0 && on("status") {
+        pieces.push(paint("31", &p.status.to_string()));
+    }
+    if on("time") && !p.clock.is_empty() {
+        pieces.push(paint("2", p.clock));
+    }
+    let sign = if p.root { "# " } else { "$ " };
+    match (pieces.is_empty(), on("newline")) {
+        (true, _) => sign.to_string(),
+        (false, true) => format!("{}\n{sign}", pieces.join(" ")),
+        (false, false) => format!("{} {sign}", pieces.join(" ")),
+    }
 }
 
 /// NSH-15: a duration worth showing, `12s`, `1m 4s` or `2h 5m`; none under 5 seconds.
@@ -150,8 +214,38 @@ mod tests {
         assert!(!is_zsh("100% \\$ "));
     }
 
+    const DEFAULT: &[&str] = &["dir", "branch", "took", "status"];
+
     fn parts(dir: &Path) -> Parts<'_> {
-        Parts { dir, home: Some(Path::new("/home/u")), branch: None, changed: false, status: 0, took: None, root: false, color: false }
+        Parts {
+            show: DEFAULT,
+            user: "u",
+            host: "box",
+            clock: "14:05",
+            dir,
+            home: Some(Path::new("/home/u")),
+            branch: None,
+            changed: false,
+            status: 0,
+            took: None,
+            root: false,
+            color: false,
+        }
+    }
+
+    // NSH-73
+    #[test]
+    fn the_prompt_shows_the_parts_named() {
+        assert_eq!(shown(None).0, DEFAULT);
+        let (show, unknown) = shown(Some("time branch user host folder nope newline"));
+        assert_eq!(show, ["user", "host", "folder", "branch", "time", "newline"]);
+        assert_eq!(unknown, ["nope"]);
+        let dir = Path::new("/home/u/proj/neosh");
+        let p = Parts { show: &show, branch: Some("main".into()), status: 1, ..parts(dir) };
+        assert_eq!(render(&p), "u@box neosh main 14:05\n$ ");
+        assert_eq!(render(&Parts { show: &["host", "dir"], ..parts(dir) }), "box ~/proj/neosh $ ");
+        assert_eq!(render(&Parts { show: &["folder"], ..parts(Path::new("/home/u")) }), "~ $ ");
+        assert_eq!(render(&Parts { show: &[], status: 1, ..parts(dir) }), "$ ");
     }
 
     // NSH-10, NSH-12

@@ -101,6 +101,27 @@ hands a line to another shell. What neosh adds is below.
 - NSH-51: `neosh --setup --look zsh` or `--look neosh` makes the look choice
   and skips the model step; with `--yes` it also writes without asking, so
   it runs without a terminal.
+- NSH-73: `NEOSH_PROMPT` names the parts neosh's own prompt shows, read at
+  each prompt, so setting it at the prompt shows at once: `user`, `host`
+  (together `user@host`), `dir` (the directory, `~` for home) or `folder`
+  (only its last folder), `branch` (NSH-12, NSH-22), `took` (NSH-15),
+  `status` (a failed one), `time` (`14:05`), and `newline` (the `$` on a
+  line of its own). They show in that order, whatever order they are
+  named in; a word that is not a part is ignored. Unset, it is
+  `dir branch took status`. `$` (`#` as root) always ends the prompt.
+  It is neosh's own prompt's: a `PS1` set by the rc or the environment
+  replaces that prompt, and `NEOSH_PROMPT` with it.
+- NSH-74: The look step offers a third choice, `my own`: the parts are
+  listed, numbered and marked on or off (starting from what an earlier
+  setup chose), with the prompt shown below as it would be after a
+  command that failed and took 12s. Typing numbers switches those parts,
+  and the list and prompt are shown again; `dir` and `folder` exclude each
+  other. Enter ends it. What is written (NSH-50) is the comment for
+  neosh's own look and `NEOSH_PROMPT='…'`, unless the parts are the
+  default ones.
+- NSH-75: `neosh --setup --prompt '<parts>'` chooses neosh's own look with
+  those parts, as `--look` does (NSH-51); a word that is not a part says
+  so, naming the parts, and exits 2.
 
 ## The language
 
