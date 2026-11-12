@@ -62,6 +62,10 @@ navi's manual, `navi setup` and `navi usage`. This manual covers the shell.
   without dashes runs a script named `setup`, as bash would.)
 - Step 1 of 4, the look: starship (the default), neosh's own prompt, or your own pick of
   its parts.
+  - starship's looks with icons (all but plain-text-symbols, no-nerd-font and pure) need a
+    Nerd Font. If none is installed, setup installs JetBrainsMono Nerd Font with Homebrew,
+    and in Terminal.app offers to make it the font of your default profile. Ghostty has the
+    icons built in. Other terminals: choose the font in their settings.
   - Choosing starship with none installed installs it: `brew install starship`, or with no
     Homebrew, starship's installer into `~/.local/bin`. If that fails, setup says how to
     install it and uses neosh's own prompt.

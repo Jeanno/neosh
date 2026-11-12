@@ -192,6 +192,17 @@ hands a line to another shell. What neosh adds is below.
   removed. Questions are asked on the terminal; without one the answer is
   no; `--yes` answers yes. `/etc/shells`, starship and `~/.neoai` are left,
   and said so.
+- NSH-84: A starship look draws icons from a Nerd Font (all but
+  `plain-text-symbols`, `no-nerd-font` and `pure-preset`). Chosen in
+  setup, in Ghostty (`TERM_PROGRAM=ghostty`, which draws the icons itself)
+  that is said and nothing done. Elsewhere, with no Nerd Font installed
+  (a font file named so in the user's or system's font folders), setup
+  installs JetBrainsMono Nerd Font without asking (`brew install --cask
+  font-jetbrains-mono-nerd-font`); with no Homebrew it says where to get
+  one. In Terminal.app it then asks `Use JetBrainsMono Nerd Font Mono in
+  Terminal? [Y/n]` and on yes sets the font of Terminal's default profile
+  (`osascript`), so new windows show the icons; in other terminals, and on
+  no, it says which font to choose where.
 
 ## The language
 

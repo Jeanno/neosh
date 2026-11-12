@@ -748,3 +748,42 @@ fn a_login_neosh_reads_the_profile_then_the_rc() {
     assert!(screen.contains("\norder=profile,rc"), "{screen}");
     assert!(screen.contains("\nfrom-the-rc"), "{screen}");
 }
+
+// NSH-84: a starship look with icons gets a Nerd Font: installed when there
+// is none, and set as Terminal's font when asked; Ghostty needs none.
+#[test]
+fn a_look_with_icons_gets_its_font() {
+    use std::os::unix::fs::PermissionsExt as _;
+    for app in ["Apple_Terminal", "ghostty"] {
+        let home = Home::new(&format!("nerdfont-{app}"));
+        std::fs::remove_file(home.0.join(".neoshrc")).unwrap();
+        for (name, body) in [
+            ("starship", "#!/bin/sh\ncase \"$1 $2\" in 'preset --list') printf 'gruvbox-rainbow\\nplain-text-symbols\\n' ;; 'preset gruvbox-rainbow') echo 'format = \"gr\"' ;; prompt*) echo '> ' ;; esac\n"),
+            ("brew", "#!/bin/sh\necho \"BREW: $*\" >> \"$HOME/navi.log\"\n"),
+            ("osascript", "#!/bin/sh\necho \"OSASCRIPT: $*\" >> \"$HOME/navi.log\"\n"),
+        ] {
+            let path = home.0.join("bin").join(name);
+            std::fs::write(&path, body).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        // Set up, starship, gruvbox-rainbow, take it, [Terminal: use the font,] no z, write, no login shell.
+        let mut lines = vec!["y", "", "1", ""];
+        if app == "Apple_Terminal" {
+            lines.push("");
+        }
+        lines.extend(["n", "", "", "exit"]);
+        let screen = home.run(&lines, &[("TERM_PROGRAM", app)]);
+        let log = home.log();
+        if app == "ghostty" {
+            assert!(screen.contains("Ghostty draws the icons itself"), "{screen}");
+            assert!(!log.contains("BREW:") && !log.contains("OSASCRIPT:"), "{log}");
+        } else {
+            if screen.contains("none is installed") {
+                assert!(log.contains("BREW: install --cask font-jetbrains-mono-nerd-font"), "{log}");
+            }
+            assert!(log.contains("OSASCRIPT: -e tell application \"Terminal\" to set font name of default settings to \"JetBrainsMonoNFM-Regular\""), "{log}");
+            assert!(screen.contains("new windows show the icons"), "{screen}");
+        }
+        assert!(std::fs::read_to_string(home.0.join(".neoshrc")).unwrap().contains("starship init bash"));
+    }
+}

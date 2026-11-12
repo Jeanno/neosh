@@ -21,6 +21,7 @@ Newest asks first. Done items move to the log at the bottom.
 - Low priority (deprioritized 2026-11-09): a Raycast release tag (neoai `raycast-v*`).
 
 ## Done
+- 2026-11-11: a starship look with icons gets its Nerd Font: installed by Homebrew, set as Terminal's font when asked; Ghostty needs none (NSH-84).
 - 2026-11-11: a login neosh (every terminal starts one) reads `~/.neoshrc` after the profile, so starship and plugins load in Terminal and Ghostty (NSH-1); `uninstall.sh` changes the login shell back first, removes neosh, and moves settings aside when asked (NSH-83).
 - 2026-11-11: neosh works as the login shell straight after install, in Terminal and Ghostty: it finds itself and navi with no startup file (NSH-81), keeps its own prompt over macOS's `/etc/bashrc` one and opens with no stray status (NSH-82), and setup and the installer ask to make it the login shell, telling macOS so apps opened again start it (NSH-80). Setup starts with the prompt (starship by default, installed if missing), then plugins (NSH-78). zsh is out of setup (its look and the PATH copy).
 - 2026-11-11: the prompt's colours, per part (`NEOSH_PROMPT_COLORS`, in setup's "my own"), and starship as a setup choice, its presets previewed and written to its config (NSH-76, NSH-77); starship checked working in neosh (1.27.0: directory, branch, time taken, status colour).

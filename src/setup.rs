@@ -167,6 +167,8 @@ pub fn run(options: &Options, rc: &Path) -> i32 {
             Some(bin) => {
                 if steps {
                     preset = pick_preset(&bin, terminal);
+                    // NSH-84: the font its icons are drawn from.
+                    nerd_font(preset.as_deref());
                 }
                 if let Some(name) = &preset {
                     if !presets(&bin).contains(name) {
@@ -389,6 +391,67 @@ fn tell_apps(me: &str) {
         println!("{}", dim("· New Terminal windows start neosh. An app already open (Ghostty, iTerm) does once you quit it (⌘Q) and open it again."));
     } else {
         println!("{}", dim("· New terminal windows start neosh; apps already open may keep their shell until you log out and back in."));
+    }
+}
+
+/// NSH-84: starship's looks that draw no icons from a Nerd Font.
+const PLAIN_PRESETS: [&str; 3] = ["plain-text-symbols", "no-nerd-font", "pure-preset"];
+const NERD_FONT_CASK: &str = "font-jetbrains-mono-nerd-font";
+/// The font Terminal is set to: its PostScript name, and how it is said.
+const NERD_FONT: (&str, &str) = ("JetBrainsMonoNFM-Regular", "JetBrainsMono Nerd Font Mono");
+
+/// NSH-84: whether a Nerd Font is installed, by its files' names.
+fn has_nerd_font(home: Option<&Path>) -> bool {
+    let mut dirs: Vec<PathBuf> = vec!["/Library/Fonts".into(), "/usr/share/fonts".into(), "/usr/local/share/fonts".into()];
+    if let Some(h) = home {
+        dirs.extend([h.join("Library/Fonts"), h.join(".local/share/fonts"), h.join(".fonts")]);
+    }
+    let named = |p: &Path| p.file_name().is_some_and(|n| n.to_string_lossy().to_lowercase().contains("nerd"));
+    dirs.iter().any(|d| {
+        std::fs::read_dir(d).into_iter().flatten().flatten().any(|e| {
+            let p = e.path();
+            named(&p) || (p.is_dir() && std::fs::read_dir(&p).into_iter().flatten().flatten().any(|f| named(&f.path())))
+        })
+    })
+}
+
+/// NSH-84: a starship look with icons needs a Nerd Font in the terminal:
+/// installed (by Homebrew) when there is none, and, asked, set as
+/// Terminal's font; Ghostty draws the icons itself.
+fn nerd_font(preset: Option<&str>) {
+    if preset.is_some_and(|p| PLAIN_PRESETS.contains(&p)) {
+        return;
+    }
+    let app = std::env::var("TERM_PROGRAM").unwrap_or_default();
+    if app == "ghostty" {
+        println!("{}", dim("· Ghostty draws the icons itself; no font to install."));
+        return;
+    }
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let (postscript, said) = NERD_FONT;
+    if !has_nerd_font(home.as_deref()) {
+        println!("\nThis look draws icons from a Nerd Font, and none is installed; installing {said}…");
+        let installed = find("brew").is_some_and(|brew| {
+            println!("{}", dim(&format!("· brew install --cask {NERD_FONT_CASK}")));
+            Command::new(brew).args(["install", "--cask", NERD_FONT_CASK]).status().is_ok_and(|s| s.success())
+        });
+        if !installed {
+            println!("Install a Nerd Font from https://www.nerdfonts.com and choose it in your terminal's settings,");
+            println!("{}", dim("or pick plain-text-symbols or no-nerd-font: neosh --setup"));
+            return;
+        }
+    }
+    if app == "Apple_Terminal" {
+        let set = format!("tell application \"Terminal\" to set font name of default settings to \"{postscript}\"");
+        if yes_no(&format!("Use {said} in Terminal? [Y/n] "), true)
+            && find("osascript").is_some_and(|o| Command::new(o).args(["-e", &set]).stdout(Stdio::null()).status().is_ok_and(|s| s.success()))
+        {
+            println!("{}", dim("· Terminal's default profile uses it; new windows show the icons."));
+        } else {
+            println!("{}", dim(&format!("· Choose {said} in Terminal › Settings › Profiles › Text › Font.")));
+        }
+    } else {
+        println!("{}", dim(&format!("· Choose {said} in your terminal's font settings to see the icons.")));
     }
 }
 
